@@ -1,0 +1,19 @@
+# O2O数据分析看板依赖包
+# 安装命令: pip install -r requirements_dashboard.txt
+
+# 核心Web框架
+dash>=2.14.0
+dash-bootstrap-components>=1.5.0
+
+# 数据处理和可视化
+pandas>=1.5.0
+plotly>=5.15.0
+numpy>=1.24.0
+
+# Excel文件处理 (如果主分析脚本还没有安装)
+openpyxl>=3.1.0
+xlsxwriter>=3.1.0
+
+# 可选：性能优化
+# dash-extensions>=1.0.0  # 提供额外的Dash组件
+# dash-mantine-components>=0.12.0  # 现代化UI组件库
