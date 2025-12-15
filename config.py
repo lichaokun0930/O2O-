@@ -180,7 +180,7 @@ ECHARTS_TOOLBOX = {
     'feature': {
         'saveAsImage': {
             'type': 'png',
-            'pixelRatio': 2,  # 2倍分辨率，高清下载
+            'pixelRatio': 4,  # 4倍分辨率，超高清下载
             'title': '下载图片',
             'backgroundColor': '#fff'
         }

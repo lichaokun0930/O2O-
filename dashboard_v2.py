@@ -775,7 +775,7 @@ class ComparisonChartBuilder:
         return fig
     
     @staticmethod
-    def create_mirror_bar_chart(own_data, competitor_data, category_col, value_col, title):
+    def create_mirror_bar_chart(own_data, competitor_data, category_col, value_col, title, own_store_name='本店'):
         """创建镜像柱状图（左右对比）- 优化版
         
         Args:
@@ -784,6 +784,7 @@ class ComparisonChartBuilder:
             category_col: 分类列名
             value_col: 数值列名
             title: 图表标题
+            own_store_name: 本店名称（用于图例显示）
             
         Returns:
             Plotly Figure对象
@@ -856,13 +857,14 @@ class ComparisonChartBuilder:
         return fig
     
     @staticmethod
-    def create_stacked_comparison_bar(own_data, competitor_data, title):
+    def create_stacked_comparison_bar(own_data, competitor_data, title, own_store_name='本店'):
         """创建堆叠对比柱状图（占比对比）
         
         Args:
             own_data: 本店数据字典，包含single_spec_pct和multi_spec_pct
             competitor_data: 竞对数据字典，包含single_spec_pct和multi_spec_pct
             title: 图表标题
+            own_store_name: 本店名称（用于图例显示）
             
         Returns:
             Plotly Figure对象
@@ -924,7 +926,7 @@ class ComparisonChartBuilder:
     
     @staticmethod
     def create_active_sku_comparison_chart(own_data, competitor_data, category_col, 
-                                           active_sku_col, title):
+                                           active_sku_col, title, own_store_name='本店'):
         """创建动销商品数对比图表（ECharts分组柱状图 + 响应式）
         
         Args:
@@ -933,6 +935,7 @@ class ComparisonChartBuilder:
             category_col: 分类列名
             active_sku_col: 动销SKU数列名
             title: 图表标题
+            own_store_name: 本店名称（用于图例显示）
             
         Returns:
             ECharts配置字典
@@ -1193,7 +1196,7 @@ class ComparisonChartBuilder:
     
     @staticmethod
     def create_active_rate_mirror_chart(own_data, competitor_data, category_col,
-                                        active_rate_col, title, total_sku_col=None):
+                                        active_rate_col, title, total_sku_col=None, own_store_name='本店'):
         """创建动销率对比图表（ECharts镜像柱状图：本店在左，竞对在右）
         
         使用加权排序算法：排序分 = 动销率 × log₁₀(SKU数量 + 1)
@@ -1206,6 +1209,7 @@ class ComparisonChartBuilder:
             active_rate_col: 动销率列名
             title: 图表标题
             total_sku_col: SKU数量列名（用于加权排序，可选）
+            own_store_name: 本店名称（用于图例显示）
             
         Returns:
             ECharts配置字典
@@ -1576,7 +1580,7 @@ class ComparisonChartBuilder:
         return fig
     
     @staticmethod
-    def create_revenue_comparison_chart(own_data, competitor_data, category_col, revenue_col, title):
+    def create_revenue_comparison_chart(own_data, competitor_data, category_col, revenue_col, title, own_store_name='本店'):
         """创建销售额对比图表（ECharts分组柱状图 + 响应式）
         
         Args:
@@ -1585,6 +1589,7 @@ class ComparisonChartBuilder:
             category_col: 分类列名
             revenue_col: 销售额列名
             title: 图表标题
+            own_store_name: 本店名称（用于图例显示）
             
         Returns:
             ECharts配置字典
@@ -1762,6 +1767,220 @@ class ComparisonChartBuilder:
         return option
     
     @staticmethod
+    def create_discount_rate_mirror_chart(own_data, competitor_data, own_store_name='本店', competitor_name='竞对'):
+        """创建折扣渗透率对比图表（ECharts镜像柱状图：本店在左，竞对在右）
+        
+        Args:
+            own_data: 本店数据DataFrame（需包含一级分类、折扣SKU数、总SKU数）
+            competitor_data: 竞对数据DataFrame
+            own_store_name: 本店名称
+            competitor_name: 竞对名称
+            
+        Returns:
+            ECharts配置字典
+        """
+        try:
+            # 提取本店数据
+            own_categories = own_data['一级分类'].tolist()
+            own_discount_sku = [int(v) if pd.notna(v) else 0 for v in own_data['美团一级分类折扣sku数']]
+            own_total_sku = [int(v) if pd.notna(v) else 0 for v in own_data['美团一级分类sku数']]
+            own_rates = [round(d / t * 100, 1) if t > 0 else 0 for d, t in zip(own_discount_sku, own_total_sku)]
+            
+            # 提取竞对数据
+            comp_categories = competitor_data['一级分类'].tolist()
+            comp_discount_sku = [int(v) if pd.notna(v) else 0 for v in competitor_data['美团一级分类折扣sku数']]
+            comp_total_sku = [int(v) if pd.notna(v) else 0 for v in competitor_data['美团一级分类sku数']]
+            comp_rates = [round(d / t * 100, 1) if t > 0 else 0 for d, t in zip(comp_discount_sku, comp_total_sku)]
+            
+            # 创建DataFrame用于合并
+            own_df = pd.DataFrame({'category': own_categories, 'own_rate': own_rates, 'own_sku': own_total_sku})
+            comp_df = pd.DataFrame({'category': comp_categories, 'comp_rate': comp_rates, 'comp_sku': comp_total_sku})
+            
+            # 合并数据（只保留共同分类）
+            merged = own_df.merge(comp_df, on='category')
+            
+            if merged.empty:
+                return {
+                    'title': {'text': '无共同分类数据', 'left': 'center', 'top': 'center'},
+                    'xAxis': {'show': False},
+                    'yAxis': {'show': False}
+                }
+            
+            categories = merged['category'].tolist()
+            own_rates = merged['own_rate'].tolist()
+            comp_rates = merged['comp_rate'].tolist()
+            
+            # 过滤掉双方都为0的分类
+            filtered_data = [(cat, own, comp) for cat, own, comp in zip(categories, own_rates, comp_rates)
+                             if own > 0 or comp > 0]
+            if filtered_data:
+                categories = [x[0] for x in filtered_data]
+                own_rates = [x[1] for x in filtered_data]
+                comp_rates = [x[2] for x in filtered_data]
+            
+            # 只显示TOP15分类（按本店折扣渗透率排序）
+            if len(categories) > 15:
+                combined = list(zip(categories, own_rates, comp_rates))
+                combined.sort(key=lambda x: x[1], reverse=True)
+                combined = combined[:15]
+                categories = [x[0] for x in combined]
+                own_rates = [x[1] for x in combined]
+                comp_rates = [x[2] for x in combined]
+            
+            # 智能计算中间区域宽度
+            max_label_len = max(len(str(cat)) for cat in categories) if categories else 4
+            center_pct = min(max(max_label_len * 1.2 + 2, 8), 18)
+            left_right = f'{50 - center_pct/2}%'
+            right_left = f'{50 + center_pct/2}%'
+            
+            # 配色：本店用青绿色（与折扣分析一致），竞对用灰色
+            own_color = '#1ABC9C'  # 青绿色
+            comp_color = '#95a5a6'  # 灰色
+            
+            option = {
+                'baseOption': {
+                    'toolbox': {
+                        'show': True,
+                        'right': 20,
+                        'top': 5,
+                        'feature': {
+                            'saveAsImage': {
+                                'type': 'png',
+                                'pixelRatio': 4,
+                                'title': '下载高清图',
+                                'name': '折扣渗透率对比',
+                                'backgroundColor': '#fff',
+                                'excludeComponents': ['toolbox']
+                            }
+                        }
+                    },
+                    'tooltip': {
+                        'trigger': 'axis',
+                        'axisPointer': {'type': 'shadow'}
+                    },
+                    'legend': {
+                        'data': ['本店', '竞对'],
+                        'top': 5,
+                        'textStyle': {'fontSize': 11}
+                    },
+                    'grid': [
+                        {'left': '5%', 'right': left_right, 'top': 35, 'bottom': 15, 'containLabel': False},
+                        {'left': right_left, 'right': '5%', 'top': 35, 'bottom': 15, 'containLabel': False}
+                    ],
+                    'xAxis': [
+                        {
+                            'type': 'value',
+                            'gridIndex': 0,
+                            'inverse': True,
+                            'axisLabel': {'formatter': '{value}%', 'fontSize': 10},
+                            'splitLine': {'show': False},
+                            'max': 100,
+                            'axisLine': {'show': False}
+                        },
+                        {
+                            'type': 'value',
+                            'gridIndex': 1,
+                            'axisLabel': {'formatter': '{value}%', 'fontSize': 10},
+                            'splitLine': {'show': False},
+                            'max': 100,
+                            'axisLine': {'show': False}
+                        }
+                    ],
+                    'yAxis': [
+                        {
+                            'type': 'category',
+                            'gridIndex': 0,
+                            'data': categories,
+                            'inverse': True,
+                            'position': 'right',
+                            'axisLine': {'show': False},
+                            'axisTick': {'show': False},
+                            'axisLabel': {'show': True, 'fontSize': 10, 'color': '#333', 'margin': 5}
+                        },
+                        {
+                            'type': 'category',
+                            'gridIndex': 1,
+                            'data': categories,
+                            'inverse': True,
+                            'position': 'left',
+                            'axisLine': {'show': False},
+                            'axisTick': {'show': False},
+                            'axisLabel': {'show': False}
+                        }
+                    ],
+                    'series': [
+                        {
+                            'name': '本店',
+                            'type': 'bar',
+                            'xAxisIndex': 0,
+                            'yAxisIndex': 0,
+                            'data': own_rates,
+                            'itemStyle': {'color': own_color, 'borderRadius': [4, 0, 0, 4]},
+                            'label': {'show': True, 'position': 'left', 'formatter': '{c}%', 'fontSize': 10, 'color': own_color},
+                            'barWidth': 16
+                        },
+                        {
+                            'name': '竞对',
+                            'type': 'bar',
+                            'xAxisIndex': 1,
+                            'yAxisIndex': 1,
+                            'data': comp_rates,
+                            'itemStyle': {'color': comp_color, 'borderRadius': [0, 4, 4, 0]},
+                            'label': {'show': True, 'position': 'right', 'formatter': '{c}%', 'fontSize': 10, 'color': comp_color},
+                            'barWidth': 16
+                        }
+                    ],
+                    'animationEasing': 'elasticOut',
+                    'animationDuration': 600
+                },
+                'media': [
+                    {
+                        'query': {'maxWidth': 500},
+                        'option': {
+                            'legend': {'top': 20, 'textStyle': {'fontSize': 9}},
+                            'grid': [
+                                {'left': '3%', 'right': '52%', 'top': 42, 'bottom': 10},
+                                {'left': '52%', 'right': '3%', 'top': 42, 'bottom': 10}
+                            ],
+                            'xAxis': [{'axisLabel': {'fontSize': 8}}, {'axisLabel': {'fontSize': 8}}],
+                            'yAxis': [{'axisLabel': {'fontSize': 8, 'margin': 3}}, {}],
+                            'series': [
+                                {'barWidth': 10, 'label': {'fontSize': 8}},
+                                {'barWidth': 10, 'label': {'fontSize': 8}}
+                            ]
+                        }
+                    },
+                    {
+                        'query': {'minWidth': 1000},
+                        'option': {
+                            'legend': {'top': 35, 'textStyle': {'fontSize': 13}},
+                            'grid': [
+                                {'left': '6%', 'right': left_right, 'top': 65, 'bottom': 20},
+                                {'left': right_left, 'right': '6%', 'top': 65, 'bottom': 20}
+                            ],
+                            'yAxis': [{'axisLabel': {'fontSize': 12, 'margin': 8}}, {}],
+                            'series': [
+                                {'barWidth': 20, 'label': {'fontSize': 11}},
+                                {'barWidth': 20, 'label': {'fontSize': 11}}
+                            ]
+                        }
+                    }
+                ]
+            }
+            
+            return option
+            
+        except Exception as e:
+            logger.error(f"❌ 折扣渗透率对比图生成失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                'title': {'text': f'图表生成失败: {str(e)}', 'left': 'center', 'top': 'center'},
+                'xAxis': {'show': False},
+                'yAxis': {'show': False}
+            }
+    
+    @staticmethod
     def create_radar_chart(own_kpi, competitor_kpi, metrics):
         """创建雷达图（多维度对比）
         
@@ -1816,13 +2035,14 @@ class ComparisonChartBuilder:
 
 # ==================== 对比视图辅助函数 ====================
 
-def create_category_comparison_view(own_data, competitor_data, competitor_name):
+def create_category_comparison_view(own_data, competitor_data, competitor_name, own_store_name='本店'):
     """创建一级分类动销分析对比视图
     
     Args:
         own_data: 本店分类数据DataFrame
         competitor_data: 竞对分类数据DataFrame
         competitor_name: 竞对门店名称
+        own_store_name: 本店名称（用于图表显示）
         
     Returns:
         Dash组件
@@ -1883,11 +2103,12 @@ def create_category_comparison_view(own_data, competitor_data, competitor_name):
                     competitor_data,
                     category_col,
                     active_sku_col,
-                    f"📦 动销商品数对比 - 本店 vs {competitor_name}"
+                    f"📦 动销商品数对比 - {own_store_name} vs {competitor_name}",
+                    own_store_name
                 )
                 components.append(
                     dbc.Col([
-                        html.H5(f"📦 动销商品数对比 - 本店 vs {competitor_name}", 
+                        html.H5(f"📦 动销商品数对比 - {own_store_name} vs {competitor_name}", 
                                style={'textAlign': 'center', 'marginBottom': '10px', 'color': '#2c3e50'}),
                         dash_echarts.DashECharts(
                             option=echarts_sku_option,
@@ -1909,12 +2130,13 @@ def create_category_comparison_view(own_data, competitor_data, competitor_name):
                     competitor_data,
                     category_col,
                     active_rate_col,
-                    f"📊 动销率对比 - 本店 vs {competitor_name}",
-                    total_sku_col=total_sku_col  # 传递SKU列用于加权排序
+                    f"📊 动销率对比 - {own_store_name} vs {competitor_name}",
+                    total_sku_col=total_sku_col,  # 传递SKU列用于加权排序
+                    own_store_name=own_store_name
                 )
                 components.append(
                     dbc.Col([
-                        html.H5(f"📊 动销率对比 - 本店 vs {competitor_name}", 
+                        html.H5(f"📊 动销率对比 - {own_store_name} vs {competitor_name}", 
                                style={'textAlign': 'center', 'marginBottom': '10px', 'color': '#2c3e50'}),
                         dash_echarts.DashECharts(
                             option=echarts_rate_option,
@@ -1935,11 +2157,12 @@ def create_category_comparison_view(own_data, competitor_data, competitor_name):
                     competitor_data,
                     category_col,
                     revenue_col,
-                    f"💰 销售额对比（售价） - 本店 vs {competitor_name}"
+                    f"💰 销售额对比（售价） - {own_store_name} vs {competitor_name}",
+                    own_store_name
                 )
                 components.append(
                     dbc.Col([
-                        html.H5(f"💰 销售额对比（售价） - 本店 vs {competitor_name}", 
+                        html.H5(f"💰 销售额对比（售价） - {own_store_name} vs {competitor_name}", 
                                style={'textAlign': 'center', 'marginBottom': '10px', 'color': '#2c3e50'}),
                         dash_echarts.DashECharts(
                             option=echarts_revenue_option,
@@ -2009,13 +2232,194 @@ def create_category_comparison_view(own_data, competitor_data, competitor_name):
         ], className="p-3")
 
 
-def create_multispec_comparison_view(own_data, competitor_data, competitor_name):
+def create_discount_comparison_view(own_data, competitor_data, competitor_name, own_store_name='本店', all_competitors=None):
+    """创建折扣商品供给与销售分析对比视图
+    
+    Args:
+        own_data: 本店分类数据DataFrame
+        competitor_data: 竞对分类数据DataFrame
+        competitor_name: 当前对比的竞对门店名称
+        own_store_name: 本店名称
+        all_competitors: 所有选中的竞对列表（用于显示提示）
+        
+    Returns:
+        Dash组件
+    """
+    try:
+        # 确保数据不为空
+        if own_data.empty or competitor_data.empty:
+            return html.Div([
+                html.H5("⚠️ 数据不足", className="text-warning"),
+                html.P("本店或竞对的分类数据为空，无法生成对比视图")
+            ], className="p-3")
+        
+        logger.info(f"💸 创建折扣对比视图: {own_store_name} vs {competitor_name}")
+        logger.info(f"📋 本店数据列: {own_data.columns.tolist()}")
+        logger.info(f"📋 竞对数据列: {competitor_data.columns.tolist()}")
+        
+        components = []
+        
+        # 如果有多个竞对，添加提示
+        if all_competitors and len(all_competitors) > 1:
+            components.append(
+                dbc.Col([
+                    html.P(f"💡 当前显示与 {competitor_name} 的对比，其他竞对: {', '.join(all_competitors[1:])}", 
+                           className="text-muted small", style={'textAlign': 'center', 'marginBottom': '10px'})
+                ], width=12)
+            )
+        
+        # 1. 折扣渗透率对比（镜像柱状图）
+        try:
+            echarts_option = ComparisonChartBuilder.create_discount_rate_mirror_chart(
+                own_data,
+                competitor_data,
+                own_store_name,
+                competitor_name
+            )
+            components.append(
+                dbc.Col([
+                    html.H5(f"💸 折扣渗透率对比 - {own_store_name} vs {competitor_name}", 
+                           style={'textAlign': 'center', 'marginBottom': '10px', 'color': '#2c3e50'}),
+                    dash_echarts.DashECharts(
+                        option=echarts_option,
+                        style={'height': '550px', 'width': '100%'}
+                    )
+                ], width=12, className="mb-4", style={'backgroundColor': 'white', 'padding': '15px', 'borderRadius': '8px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'})
+            )
+        except Exception as e:
+            logger.error(f"❌ 折扣渗透率对比图生成失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+        
+        # 2. 整体折扣渗透率汇总卡片
+        try:
+            # 计算本店整体折扣渗透率
+            own_discount_sku = sum([int(v) if pd.notna(v) else 0 for v in own_data['美团一级分类折扣sku数']])
+            own_total_sku = sum([int(v) if pd.notna(v) else 0 for v in own_data['美团一级分类sku数']])
+            own_overall_rate = round(own_discount_sku / own_total_sku * 100, 1) if own_total_sku > 0 else 0
+            
+            # 计算竞对整体折扣渗透率
+            comp_discount_sku = sum([int(v) if pd.notna(v) else 0 for v in competitor_data['美团一级分类折扣sku数']])
+            comp_total_sku = sum([int(v) if pd.notna(v) else 0 for v in competitor_data['美团一级分类sku数']])
+            comp_overall_rate = round(comp_discount_sku / comp_total_sku * 100, 1) if comp_total_sku > 0 else 0
+            
+            # 计算差异
+            rate_diff = round(own_overall_rate - comp_overall_rate, 1)
+            sku_diff = own_discount_sku - comp_discount_sku
+            
+            # 创建汇总卡片
+            def make_summary_card(title, own_val, comp_val, diff, is_pct=False):
+                """创建汇总卡片"""
+                diff_color = '#27ae60' if diff >= 0 else '#e74c3c'
+                diff_text = f"+{diff}" if diff > 0 else str(diff)
+                if is_pct:
+                    diff_text += '%'
+                    own_text = f"{own_val}%"
+                    comp_text = f"{comp_val}%"
+                else:
+                    own_text = f"{own_val:,}"
+                    comp_text = f"{comp_val:,}"
+                
+                return html.Div([
+                    html.Div(title, style={'fontSize': '0.85rem', 'color': '#666', 'marginBottom': '5px'}),
+                    html.Div([
+                        html.Span("本店 ", style={'color': '#1ABC9C', 'fontSize': '0.8rem'}),
+                        html.Span(own_text, style={'fontWeight': 'bold', 'fontSize': '1.1rem', 'color': '#1ABC9C'}),
+                        html.Span(" vs ", style={'color': '#999', 'margin': '0 5px'}),
+                        html.Span("竞对 ", style={'color': '#95a5a6', 'fontSize': '0.8rem'}),
+                        html.Span(comp_text, style={'fontWeight': 'bold', 'fontSize': '1.1rem', 'color': '#95a5a6'}),
+                    ]),
+                    html.Div([
+                        html.Span("差异: ", style={'color': '#999', 'fontSize': '0.8rem'}),
+                        html.Span(diff_text, style={'color': diff_color, 'fontWeight': 'bold', 'fontSize': '1rem'})
+                    ], style={'marginTop': '3px'})
+                ], style={
+                    'backgroundColor': '#f8f9fa',
+                    'padding': '12px 15px',
+                    'borderRadius': '8px',
+                    'textAlign': 'center',
+                    'flex': '1',
+                    'margin': '0 8px'
+                })
+            
+            summary_cards = html.Div([
+                make_summary_card("整体折扣渗透率", own_overall_rate, comp_overall_rate, rate_diff, is_pct=True),
+                make_summary_card("折扣SKU总数", own_discount_sku, comp_discount_sku, sku_diff),
+                make_summary_card("SKU总数", own_total_sku, comp_total_sku, own_total_sku - comp_total_sku)
+            ], style={
+                'display': 'flex',
+                'justifyContent': 'space-between',
+                'marginBottom': '15px'
+            })
+            
+            components.insert(0 if not all_competitors or len(all_competitors) <= 1 else 1, 
+                dbc.Col([summary_cards], width=12, className="mb-3")
+            )
+            
+        except Exception as e:
+            logger.warning(f"⚠️ 折扣汇总卡片生成失败: {e}")
+        
+        if not components:
+            return html.Div([
+                html.H5("⚠️ 无法生成对比图表", className="text-warning"),
+                html.P("未找到可对比的折扣数据列"),
+                html.P(f"可用列名: {', '.join(own_data.columns.tolist())}", className="text-muted small")
+            ], className="p-3")
+        
+        # 生成折扣分类差异分析洞察
+        try:
+            # 调用折扣差异分析
+            discount_insights = DifferenceAnalyzer.analyze_discount_differences(
+                own_data, 
+                competitor_data
+            )
+            
+            # 生成改进建议
+            recommendations = DifferenceAnalyzer.generate_discount_recommendations(discount_insights)
+            
+            # 合并洞察和建议
+            all_insights = discount_insights + recommendations
+            
+            # 创建差异分析面板
+            if all_insights:
+                insights_panel = DashboardComponents.create_insights_panel(all_insights)
+            else:
+                insights_panel = html.Div([
+                    html.P("✅ 本店在所有分类的折扣渗透率上均领先或持平", className="text-success text-center p-3")
+                ])
+            
+            # 添加差异分析区域
+            components.append(
+                dbc.Col([
+                    html.Hr(className="my-4"),
+                    html.H5("🔍 分类差异分析", className="mb-3"),
+                    insights_panel
+                ], width=12)
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ 折扣分类差异分析生成失败: {e}")
+            # 差异分析失败不影响主要图表显示
+        
+        return dbc.Row(components)
+        
+    except Exception as e:
+        logger.error(f"❌ 创建折扣对比视图失败: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return html.Div([
+            html.H5("❌ 对比视图生成失败", className="text-danger"),
+            html.P(f"错误信息: {str(e)}")
+        ], className="p-3")
+
+
+def create_multispec_comparison_view(own_data, competitor_data, competitor_name, own_store_name='本店'):
     """创建多规格商品供给分析对比视图
     
     Args:
         own_data: 本店分类数据DataFrame
         competitor_data: 竞对分类数据DataFrame
         competitor_name: 竞对门店名称
+        own_store_name: 本店名称（用于图表显示）
         
     Returns:
         Dash组件
@@ -2060,7 +2464,8 @@ def create_multispec_comparison_view(own_data, competitor_data, competitor_name)
                     competitor_data,
                     category_col,
                     multispec_sku_col,
-                    f"🔀 多规格SKU数量对比 - 本店 vs {competitor_name}"
+                    f"🔀 多规格SKU数量对比 - {own_store_name} vs {competitor_name}",
+                    own_store_name
                 )
                 components.append(
                     dbc.Col([
@@ -2096,7 +2501,8 @@ def create_multispec_comparison_view(own_data, competitor_data, competitor_name)
                 fig_ratio = ComparisonChartBuilder.create_stacked_comparison_bar(
                     own_ratio_data,
                     comp_ratio_data,
-                    f"📊 多规格占比对比 - 本店 vs {competitor_name}"
+                    f"📊 多规格占比对比 - {own_store_name} vs {competitor_name}",
+                    own_store_name
                 )
                 components.append(
                     dbc.Col([
@@ -2116,6 +2522,296 @@ def create_multispec_comparison_view(own_data, competitor_data, competitor_name)
         
     except Exception as e:
         logger.error(f"❌ 创建多规格对比视图失败: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return html.Div([
+            html.H5("❌ 对比视图生成失败", className="text-danger"),
+            html.P(f"错误信息: {str(e)}")
+        ], className="p-3")
+
+
+def create_price_comparison_view(own_data, competitor_data, competitor_name, own_store_name='本店', all_competitors=None):
+    """创建价格带分布分析对比视图
+    
+    Args:
+        own_data: 本店价格带数据DataFrame
+        competitor_data: 竞对价格带数据DataFrame
+        competitor_name: 当前对比的竞对门店名称
+        own_store_name: 本店名称
+        all_competitors: 所有选中的竞对列表（用于显示提示）
+        
+    Returns:
+        Dash组件
+    """
+    try:
+        # 确保数据不为空
+        if own_data.empty or competitor_data.empty:
+            return html.Div([
+                html.H5("⚠️ 数据不足", className="text-warning"),
+                html.P("本店或竞对的价格带数据为空，无法生成对比视图")
+            ], className="p-3")
+        
+        logger.info(f"💰 创建价格带对比视图: {own_store_name} vs {competitor_name}")
+        logger.info(f"📋 本店数据列: {own_data.columns.tolist()}")
+        logger.info(f"📋 竞对数据列: {competitor_data.columns.tolist()}")
+        
+        components = []
+        
+        # 如果有多个竞对，添加提示
+        if all_competitors and len(all_competitors) > 1:
+            components.append(
+                dbc.Col([
+                    html.P(f"💡 当前显示与 {competitor_name} 的对比，其他竞对: {', '.join(all_competitors[1:])}", 
+                           className="text-muted small", style={'textAlign': 'center', 'marginBottom': '10px'})
+                ], width=12)
+            )
+        
+        # 查找列名
+        def find_col(df, keywords):
+            for col in df.columns:
+                if any(kw in str(col) for kw in keywords):
+                    return col
+            return None
+        
+        price_col = own_data.columns[0]  # 第一列通常是价格带名称
+        sku_col = find_col(own_data, ['sku数', 'SKU数', 'SKU', 'sku'])
+        revenue_col = find_col(own_data, ['销售额', '售价销售额', '金额'])
+        
+        if not sku_col and len(own_data.columns) > 1:
+            sku_col = own_data.columns[1]
+        if not revenue_col and len(own_data.columns) > 2:
+            revenue_col = own_data.columns[2]
+        
+        # 1. 价格带SKU数对比（分组柱状图）
+        if sku_col and sku_col in competitor_data.columns:
+            try:
+                # 合并数据
+                merged = pd.merge(
+                    own_data[[price_col, sku_col]].rename(columns={sku_col: '本店SKU数'}),
+                    competitor_data[[price_col, sku_col]].rename(columns={sku_col: '竞对SKU数'}),
+                    on=price_col, how='outer'
+                ).fillna(0)
+                
+                # 创建ECharts分组柱状图
+                price_bands = merged[price_col].tolist()
+                own_values = merged['本店SKU数'].tolist()
+                comp_values = merged['竞对SKU数'].tolist()
+                
+                echarts_option = {
+                    'tooltip': {
+                        'trigger': 'axis',
+                        'axisPointer': {'type': 'shadow'}
+                    },
+                    'legend': {
+                        'data': [own_store_name, competitor_name],
+                        'top': 10
+                    },
+                    'grid': {
+                        'left': '3%', 'right': '4%', 'bottom': '15%', 'top': '60px',
+                        'containLabel': True
+                    },
+                    'xAxis': {
+                        'type': 'category',
+                        'data': price_bands,
+                        'axisLabel': {'rotate': 30, 'fontSize': 11}
+                    },
+                    'yAxis': {
+                        'type': 'value',
+                        'name': 'SKU数量'
+                    },
+                    'series': [
+                        {
+                            'name': own_store_name,
+                            'type': 'bar',
+                            'data': own_values,
+                            'itemStyle': {'color': '#1ABC9C'}
+                        },
+                        {
+                            'name': competitor_name,
+                            'type': 'bar',
+                            'data': comp_values,
+                            'itemStyle': {'color': '#95a5a6'}
+                        }
+                    ]
+                }
+                
+                components.append(
+                    dbc.Col([
+                        html.H5(f"📊 价格带SKU数对比 - {own_store_name} vs {competitor_name}", 
+                               style={'textAlign': 'center', 'marginBottom': '10px', 'color': '#2c3e50'}),
+                        dash_echarts.DashECharts(
+                            option=echarts_option,
+                            style={'height': '450px', 'width': '100%'}
+                        )
+                    ], width=12, className="mb-4", style={'backgroundColor': 'white', 'padding': '15px', 'borderRadius': '8px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'})
+                )
+            except Exception as e:
+                logger.error(f"❌ 价格带SKU数对比图生成失败: {e}")
+        
+        # 2. 价格带销售额对比（分组柱状图）
+        if revenue_col and revenue_col in competitor_data.columns:
+            try:
+                merged_rev = pd.merge(
+                    own_data[[price_col, revenue_col]].rename(columns={revenue_col: '本店销售额'}),
+                    competitor_data[[price_col, revenue_col]].rename(columns={revenue_col: '竞对销售额'}),
+                    on=price_col, how='outer'
+                ).fillna(0)
+                
+                price_bands = merged_rev[price_col].tolist()
+                own_rev = merged_rev['本店销售额'].tolist()
+                comp_rev = merged_rev['竞对销售额'].tolist()
+                
+                echarts_rev_option = {
+                    'tooltip': {
+                        'trigger': 'axis',
+                        'axisPointer': {'type': 'shadow'},
+                        'formatter': '''function(params) {
+                            var result = params[0].axisValue + '<br/>';
+                            params.forEach(function(item) {
+                                result += item.marker + item.seriesName + ': ¥' + item.value.toLocaleString() + '<br/>';
+                            });
+                            return result;
+                        }'''
+                    },
+                    'legend': {
+                        'data': [own_store_name, competitor_name],
+                        'top': 10
+                    },
+                    'grid': {
+                        'left': '3%', 'right': '4%', 'bottom': '15%', 'top': '60px',
+                        'containLabel': True
+                    },
+                    'xAxis': {
+                        'type': 'category',
+                        'data': price_bands,
+                        'axisLabel': {'rotate': 30, 'fontSize': 11}
+                    },
+                    'yAxis': {
+                        'type': 'value',
+                        'name': '销售额(元)',
+                        'axisLabel': {
+                            'formatter': '''function(value) {
+                                if (value >= 10000) return (value/10000).toFixed(1) + '万';
+                                return value;
+                            }'''
+                        }
+                    },
+                    'series': [
+                        {
+                            'name': own_store_name,
+                            'type': 'bar',
+                            'data': own_rev,
+                            'itemStyle': {'color': '#3498db'}
+                        },
+                        {
+                            'name': competitor_name,
+                            'type': 'bar',
+                            'data': comp_rev,
+                            'itemStyle': {'color': '#e74c3c'}
+                        }
+                    ]
+                }
+                
+                components.append(
+                    dbc.Col([
+                        html.H5(f"💰 价格带销售额对比 - {own_store_name} vs {competitor_name}", 
+                               style={'textAlign': 'center', 'marginBottom': '10px', 'color': '#2c3e50'}),
+                        dash_echarts.DashECharts(
+                            option=echarts_rev_option,
+                            style={'height': '450px', 'width': '100%'}
+                        )
+                    ], width=12, className="mb-4", style={'backgroundColor': 'white', 'padding': '15px', 'borderRadius': '8px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'})
+                )
+            except Exception as e:
+                logger.error(f"❌ 价格带销售额对比图生成失败: {e}")
+        
+        # 3. 汇总卡片
+        try:
+            own_total_sku = own_data[sku_col].sum() if sku_col else 0
+            comp_total_sku = competitor_data[sku_col].sum() if sku_col else 0
+            own_total_rev = own_data[revenue_col].sum() if revenue_col else 0
+            comp_total_rev = competitor_data[revenue_col].sum() if revenue_col else 0
+            
+            sku_diff = int(own_total_sku - comp_total_sku)
+            rev_diff = own_total_rev - comp_total_rev
+            
+            def make_summary_card(title, own_val, comp_val, diff, is_currency=False):
+                diff_color = '#27ae60' if diff >= 0 else '#e74c3c'
+                if is_currency:
+                    own_text = f"¥{own_val:,.0f}"
+                    comp_text = f"¥{comp_val:,.0f}"
+                    diff_text = f"+¥{diff:,.0f}" if diff >= 0 else f"¥{diff:,.0f}"
+                else:
+                    own_text = f"{int(own_val):,}"
+                    comp_text = f"{int(comp_val):,}"
+                    diff_text = f"+{int(diff):,}" if diff >= 0 else f"{int(diff):,}"
+                
+                return html.Div([
+                    html.Div(title, style={'fontSize': '12px', 'color': '#7f8c8d', 'marginBottom': '5px'}),
+                    html.Div([
+                        html.Span(f"本店: {own_text}", style={'color': '#1ABC9C', 'fontWeight': 'bold'}),
+                        html.Span(" vs ", style={'color': '#95a5a6', 'margin': '0 5px'}),
+                        html.Span(f"竞对: {comp_text}", style={'color': '#95a5a6'})
+                    ], style={'fontSize': '14px'}),
+                    html.Div(f"差异: {diff_text}", style={'fontSize': '13px', 'color': diff_color, 'fontWeight': 'bold', 'marginTop': '3px'})
+                ], style={'backgroundColor': '#f8f9fa', 'padding': '12px', 'borderRadius': '8px', 'textAlign': 'center', 'flex': '1', 'margin': '0 5px'})
+            
+            summary_cards = html.Div([
+                make_summary_card("SKU总数", own_total_sku, comp_total_sku, sku_diff),
+                make_summary_card("销售额总计", own_total_rev, comp_total_rev, rev_diff, is_currency=True)
+            ], style={'display': 'flex', 'justifyContent': 'center', 'marginBottom': '15px'})
+            
+            components.insert(0 if not all_competitors or len(all_competitors) <= 1 else 1, 
+                dbc.Col([summary_cards], width=12)
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ 价格带汇总卡片生成失败: {e}")
+        
+        if not components:
+            return html.Div([
+                html.H5("⚠️ 无法生成对比图表", className="text-warning"),
+                html.P("未找到可对比的价格带数据列"),
+                html.P(f"可用列名: {', '.join(own_data.columns.tolist())}", className="text-muted small")
+            ], className="p-3")
+        
+        # 生成价格带分类差异分析洞察
+        try:
+            # 调用价格带差异分析
+            price_insights = DifferenceAnalyzer.analyze_price_differences(
+                own_data, 
+                competitor_data
+            )
+            
+            # 生成改进建议
+            recommendations = DifferenceAnalyzer.generate_price_recommendations(price_insights)
+            
+            # 合并洞察和建议
+            all_insights = price_insights + recommendations
+            
+            # 创建差异分析面板
+            if all_insights:
+                insights_panel = DashboardComponents.create_insights_panel(all_insights)
+            else:
+                insights_panel = html.Div([
+                    html.P("✅ 本店在所有价格带上均领先或持平", className="text-success text-center p-3")
+                ])
+            
+            # 添加差异分析区域
+            components.append(
+                dbc.Col([
+                    html.Hr(className="my-4"),
+                    html.H5("🔍 价格带差异分析", className="mb-3"),
+                    insights_panel
+                ], width=12)
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ 价格带差异分析生成失败: {e}")
+            # 差异分析失败不影响主要图表显示
+        
+        return dbc.Row(components)
+        
+    except Exception as e:
+        logger.error(f"❌ 创建价格带对比视图失败: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return html.Div([
@@ -2195,10 +2891,12 @@ class DifferenceAnalyzer:
             own_val = own_kpi.get(metric['key'], 0)
             comp_val = competitor_kpi.get(metric['key'], 0)
             
-            # 处理None值
-            if own_val is None:
+            # 处理None值和类型转换
+            try:
+                own_val = float(own_val) if own_val is not None else 0
+                comp_val = float(comp_val) if comp_val is not None else 0
+            except (ValueError, TypeError):
                 own_val = 0
-            if comp_val is None:
                 comp_val = 0
             
             # 跳过竞对值为0的情况（无法计算百分比）
@@ -2266,79 +2964,148 @@ class DifferenceAnalyzer:
     def analyze_category_differences(own_category, competitor_category):
         """分析分类差异，生成分类级别的差异洞察
         
-        对比各个一级分类的SKU数量，找出竞对领先的分类，
-        生成包含分类名称和差异倍数/差异值的洞察。
+        使用加权排序：动销率差异 × log₁₀(SKU数+1)，避免小样本分类虚高。
+        只分析SKU数 >= 30 的分类，排除"熟食/鲜食""海鲜水产"等小样本分类。
         
         Args:
-            own_category: 本店分类数据列表，每项为字典，包含分类名和SKU数
-            competitor_category: 竞对分类数据列表，格式同上
+            own_category: 本店分类数据列表
+            competitor_category: 竞对分类数据列表
             
         Returns:
-            洞察列表（最多3条），每条洞察格式为：
-            {
-                'icon': str,  # 图标
-                'text': str,  # 洞察文本，包含分类名称和差异倍数/差异值
-                'level': str  # 级别：info
-            }
+            洞察列表（最多4条）
         """
+        import math
         insights = []
         
-        # 转换为DataFrame
         own_df = pd.DataFrame(own_category)
         comp_df = pd.DataFrame(competitor_category)
         
-        # 处理空数据
         if own_df.empty or comp_df.empty:
             return insights
         
-        # 获取分类列名和SKU列名
-        # 假设第一列是分类名，第二列是SKU数
+        def find_col(df, keywords):
+            for col in df.columns:
+                if any(kw in str(col) for kw in keywords):
+                    return col
+            return None
+        
         category_col = own_df.columns[0]
-        sku_col = own_df.columns[1] if len(own_df.columns) > 1 else None
+        rate_col = find_col(own_df, ['动销率(类内)', '动销率（类内）', '动销比率'])
+        total_sku_col = find_col(own_df, ['去重SKU数(口径', '去重SKU数（口径', '去重sku'])
+        active_sku_col = find_col(own_df, ['动销sku数', '动销SKU数'])
         
-        if not sku_col:
-            return insights
+        # 最小SKU数阈值，过滤小样本分类
+        MIN_SKU_THRESHOLD = 30
         
-        # 合并数据
-        merged = pd.merge(
-            own_df[[category_col, sku_col]],
-            comp_df[[category_col, sku_col]],
-            on=category_col,
-            how='outer',
-            suffixes=('_own', '_comp')
-        ).fillna(0)
-        
-        # 计算差异
-        own_col = f'{sku_col}_own'
-        comp_col = f'{sku_col}_comp'
-        merged['diff'] = merged[comp_col] - merged[own_col]
-        
-        # 找出竞对领先的分类（diff > 0 表示竞对SKU数更多）
-        competitor_leading = merged[merged['diff'] > 0].nlargest(3, 'diff')
-        
-        for _, row in competitor_leading.iterrows():
-            category = row[category_col]
-            own_sku = row[own_col]
-            comp_sku = row[comp_col]
-            
-            if comp_sku > 0:
-                # 计算倍数
-                ratio = comp_sku / own_sku if own_sku > 0 else float('inf')
+        # 1. 分析动销率差异（加权排序）
+        if rate_col and rate_col in comp_df.columns:
+            try:
+                cols_own = [category_col, rate_col]
+                cols_comp = [category_col, rate_col]
+                if total_sku_col and total_sku_col in own_df.columns:
+                    cols_own.append(total_sku_col)
+                if total_sku_col and total_sku_col in comp_df.columns:
+                    cols_comp.append(total_sku_col)
                 
-                if ratio == float('inf') or own_sku == 0:
-                    # 本店为0的情况
-                    insight_text = f'竞对在"{category}"有{comp_sku:.0f}个SKU，本店为0'
+                merged = pd.merge(
+                    own_df[cols_own], comp_df[cols_comp],
+                    on=category_col, suffixes=('_own', '_comp')
+                )
+                
+                own_rate_col = f'{rate_col}_own'
+                comp_rate_col = f'{rate_col}_comp'
+                
+                # 转换为百分比
+                merged[own_rate_col] = merged[own_rate_col].apply(lambda x: float(x) * 100 if float(x) <= 1 else float(x))
+                merged[comp_rate_col] = merged[comp_rate_col].apply(lambda x: float(x) * 100 if float(x) <= 1 else float(x))
+                merged['rate_diff'] = merged[own_rate_col] - merged[comp_rate_col]
+                
+                # 过滤小样本分类（双方SKU数都要 >= 阈值）
+                if total_sku_col:
+                    own_sku_col = f'{total_sku_col}_own'
+                    comp_sku_col = f'{total_sku_col}_comp'
+                    if own_sku_col in merged.columns and comp_sku_col in merged.columns:
+                        merged = merged[(merged[own_sku_col] >= MIN_SKU_THRESHOLD) | (merged[comp_sku_col] >= MIN_SKU_THRESHOLD)]
+                        # 计算加权分数：差异绝对值 × log₁₀(平均SKU数+1)
+                        merged['avg_sku'] = (merged[own_sku_col] + merged[comp_sku_col]) / 2
+                        merged['weight_score'] = merged['rate_diff'].abs() * merged['avg_sku'].apply(lambda x: math.log10(x + 1))
+                
+                if merged.empty:
+                    return insights
+                
+                # 找出本店落后的分类（动销率差异 < -5%，按加权分数排序）
+                lagging = merged[merged['rate_diff'] < -5]
+                if 'weight_score' in lagging.columns:
+                    lagging = lagging.nlargest(2, 'weight_score')
                 else:
-                    # 正常情况，显示倍数和具体数值
-                    insight_text = f'竞对在"{category}"的SKU数是本店的{ratio:.1f}倍（{comp_sku:.0f} vs {own_sku:.0f}）'
+                    lagging = lagging.nsmallest(2, 'rate_diff')
                 
-                insights.append({
-                    'icon': '📊',
-                    'text': insight_text,
-                    'level': 'info'
-                })
+                for _, row in lagging.iterrows():
+                    cat = row[category_col]
+                    own_rate = row[own_rate_col]
+                    comp_rate = row[comp_rate_col]
+                    diff = abs(row['rate_diff'])
+                    sku_info = ""
+                    if total_sku_col and f'{total_sku_col}_own' in row:
+                        sku_info = f"，SKU数{int(row[f'{total_sku_col}_own'])}"
+                    insights.append({
+                        'icon': '📉',
+                        'text': f'"{cat}"动销率落后{diff:.1f}%（本店{own_rate:.1f}% vs 竞对{comp_rate:.1f}%{sku_info}）',
+                        'level': 'warning'
+                    })
+                
+                # 找出本店领先的分类
+                leading = merged[merged['rate_diff'] > 5]
+                if 'weight_score' in leading.columns:
+                    leading = leading.nlargest(2, 'weight_score')
+                else:
+                    leading = leading.nlargest(2, 'rate_diff')
+                
+                for _, row in leading.iterrows():
+                    cat = row[category_col]
+                    own_rate = row[own_rate_col]
+                    comp_rate = row[comp_rate_col]
+                    diff = row['rate_diff']
+                    sku_info = ""
+                    if total_sku_col and f'{total_sku_col}_own' in row:
+                        sku_info = f"，SKU数{int(row[f'{total_sku_col}_own'])}"
+                    insights.append({
+                        'icon': '📈',
+                        'text': f'"{cat}"动销率领先{diff:.1f}%（本店{own_rate:.1f}% vs 竞对{comp_rate:.1f}%{sku_info}）',
+                        'level': 'success'
+                    })
+            except Exception as e:
+                logger.warning(f"动销率差异分析失败: {e}")
         
-        return insights[:3]  # 最多返回3条
+        # 2. 分析动销SKU数差异（只分析大分类）
+        if active_sku_col and active_sku_col in comp_df.columns and len(insights) < 4:
+            try:
+                merged = pd.merge(
+                    own_df[[category_col, active_sku_col]],
+                    comp_df[[category_col, active_sku_col]],
+                    on=category_col, suffixes=('_own', '_comp')
+                )
+                
+                own_col = f'{active_sku_col}_own'
+                comp_col = f'{active_sku_col}_comp'
+                # 只分析双方动销SKU数都 >= 20 的分类
+                merged = merged[(merged[own_col] >= 20) | (merged[comp_col] >= 20)]
+                merged['sku_diff'] = merged[comp_col] - merged[own_col]
+                
+                comp_leading = merged[merged['sku_diff'] > 30].nlargest(1, 'sku_diff')
+                for _, row in comp_leading.iterrows():
+                    cat = row[category_col]
+                    own_sku = int(row[own_col])
+                    comp_sku = int(row[comp_col])
+                    insights.append({
+                        'icon': '📊',
+                        'text': f'"{cat}"竞对动销SKU领先（竞对{comp_sku}个 vs 本店{own_sku}个）',
+                        'level': 'info'
+                    })
+            except Exception as e:
+                logger.warning(f"动销SKU差异分析失败: {e}")
+        
+        return insights[:4]
     
     @staticmethod
     def generate_recommendations(insights):
@@ -2395,6 +3162,311 @@ class DifferenceAnalyzer:
                     seen_types.add('sales')
             
             # 最多返回2条建议
+            if len(recommendations) >= 2:
+                break
+        
+        return recommendations[:2]
+    
+    @staticmethod
+    def analyze_discount_differences(own_category, competitor_category):
+        """分析折扣渗透率差异，生成分类级别的差异洞察
+        
+        分析本店与竞对在各分类的折扣渗透率差异，识别需要改进的分类。
+        
+        Args:
+            own_category: 本店分类数据列表或DataFrame
+            competitor_category: 竞对分类数据列表或DataFrame
+            
+        Returns:
+            洞察列表（最多4条）
+        """
+        import math
+        insights = []
+        
+        own_df = pd.DataFrame(own_category) if not isinstance(own_category, pd.DataFrame) else own_category
+        comp_df = pd.DataFrame(competitor_category) if not isinstance(competitor_category, pd.DataFrame) else competitor_category
+        
+        if own_df.empty or comp_df.empty:
+            return insights
+        
+        def find_col(df, keywords):
+            for col in df.columns:
+                if any(kw in str(col) for kw in keywords):
+                    return col
+            return None
+        
+        category_col = own_df.columns[0]
+        discount_sku_col = find_col(own_df, ['折扣sku数', '折扣SKU数', '折扣商品数'])
+        total_sku_col = find_col(own_df, ['一级分类sku数', '一级分类SKU数', 'sku数', 'SKU数'])
+        
+        if not discount_sku_col or not total_sku_col:
+            return insights
+        
+        if discount_sku_col not in comp_df.columns or total_sku_col not in comp_df.columns:
+            return insights
+        
+        try:
+            # 合并数据
+            merged = pd.merge(
+                own_df[[category_col, discount_sku_col, total_sku_col]],
+                comp_df[[category_col, discount_sku_col, total_sku_col]],
+                on=category_col, suffixes=('_own', '_comp')
+            )
+            
+            if merged.empty:
+                return insights
+            
+            own_discount_col = f'{discount_sku_col}_own'
+            comp_discount_col = f'{discount_sku_col}_comp'
+            own_total_col = f'{total_sku_col}_own'
+            comp_total_col = f'{total_sku_col}_comp'
+            
+            # 计算折扣渗透率
+            merged['own_rate'] = merged.apply(
+                lambda r: round(r[own_discount_col] / r[own_total_col] * 100, 1) if r[own_total_col] > 0 else 0, axis=1
+            )
+            merged['comp_rate'] = merged.apply(
+                lambda r: round(r[comp_discount_col] / r[comp_total_col] * 100, 1) if r[comp_total_col] > 0 else 0, axis=1
+            )
+            merged['rate_diff'] = merged['own_rate'] - merged['comp_rate']
+            
+            # 计算加权分数（差异 × log(SKU数+1)）
+            merged['avg_sku'] = (merged[own_total_col] + merged[comp_total_col]) / 2
+            merged['weight_score'] = merged['rate_diff'].abs() * merged['avg_sku'].apply(lambda x: math.log10(x + 1))
+            
+            # 过滤小样本分类（SKU数 >= 20）
+            merged = merged[(merged[own_total_col] >= 20) | (merged[comp_total_col] >= 20)]
+            
+            if merged.empty:
+                return insights
+            
+            # 找出本店落后的分类（折扣渗透率差异 < -5%）
+            lagging = merged[merged['rate_diff'] < -5].nlargest(2, 'weight_score')
+            for _, row in lagging.iterrows():
+                cat = row[category_col]
+                own_rate = row['own_rate']
+                comp_rate = row['comp_rate']
+                diff = abs(row['rate_diff'])
+                insights.append({
+                    'icon': '📉',
+                    'text': f'"{cat}"折扣渗透率落后{diff:.1f}%（本店{own_rate:.1f}% vs 竞对{comp_rate:.1f}%）',
+                    'level': 'warning'
+                })
+            
+            # 找出本店领先的分类（折扣渗透率差异 > 5%）
+            leading = merged[merged['rate_diff'] > 5].nlargest(2, 'weight_score')
+            for _, row in leading.iterrows():
+                cat = row[category_col]
+                own_rate = row['own_rate']
+                comp_rate = row['comp_rate']
+                diff = row['rate_diff']
+                insights.append({
+                    'icon': '📈',
+                    'text': f'"{cat}"折扣渗透率领先{diff:.1f}%（本店{own_rate:.1f}% vs 竞对{comp_rate:.1f}%）',
+                    'level': 'success'
+                })
+            
+            # 分析折扣SKU数差异
+            if len(insights) < 4:
+                merged['sku_diff'] = merged[comp_discount_col] - merged[own_discount_col]
+                comp_leading = merged[merged['sku_diff'] > 10].nlargest(1, 'sku_diff')
+                for _, row in comp_leading.iterrows():
+                    cat = row[category_col]
+                    own_sku = int(row[own_discount_col])
+                    comp_sku = int(row[comp_discount_col])
+                    insights.append({
+                        'icon': '📊',
+                        'text': f'"{cat}"竞对折扣SKU领先（竞对{comp_sku}个 vs 本店{own_sku}个）',
+                        'level': 'info'
+                    })
+            
+        except Exception as e:
+            logger.warning(f"折扣差异分析失败: {e}")
+        
+        return insights[:4]
+    
+    @staticmethod
+    def generate_discount_recommendations(insights):
+        """基于折扣洞察生成改进建议
+        
+        Args:
+            insights: 折扣洞察列表
+            
+        Returns:
+            建议列表（最多2条）
+        """
+        recommendations = []
+        seen_types = set()
+        
+        for insight in insights:
+            text = insight.get('text', '')
+            
+            if '折扣渗透率落后' in text:
+                if 'rate' not in seen_types:
+                    recommendations.append({
+                        'icon': '💡',
+                        'text': '建议：增加该分类的折扣商品数量，提升折扣渗透率',
+                        'level': 'success'
+                    })
+                    seen_types.add('rate')
+            elif '折扣SKU领先' in text or '折扣SKU' in text:
+                if 'sku' not in seen_types:
+                    recommendations.append({
+                        'icon': '💡',
+                        'text': '建议：扩大折扣商品覆盖范围，增加促销力度',
+                        'level': 'success'
+                    })
+                    seen_types.add('sku')
+            
+            if len(recommendations) >= 2:
+                break
+        
+        return recommendations[:2]
+    
+    @staticmethod
+    def analyze_price_differences(own_data, competitor_data):
+        """分析价格带差异，生成价格带级别的差异洞察
+        
+        分析本店与竞对在各价格带的SKU数和销售额差异。
+        
+        Args:
+            own_data: 本店价格带数据DataFrame
+            competitor_data: 竞对价格带数据DataFrame
+            
+        Returns:
+            洞察列表（最多4条）
+        """
+        import math
+        insights = []
+        
+        own_df = pd.DataFrame(own_data) if not isinstance(own_data, pd.DataFrame) else own_data
+        comp_df = pd.DataFrame(competitor_data) if not isinstance(competitor_data, pd.DataFrame) else competitor_data
+        
+        if own_df.empty or comp_df.empty:
+            return insights
+        
+        def find_col(df, keywords):
+            for col in df.columns:
+                if any(kw in str(col) for kw in keywords):
+                    return col
+            return None
+        
+        price_col = own_df.columns[0]  # 第一列是价格带名称
+        sku_col = find_col(own_df, ['sku数', 'SKU数', 'SKU', 'sku'])
+        revenue_col = find_col(own_df, ['销售额', '售价销售额', '金额'])
+        
+        if not sku_col and len(own_df.columns) > 1:
+            sku_col = own_df.columns[1]
+        if not revenue_col and len(own_df.columns) > 2:
+            revenue_col = own_df.columns[2]
+        
+        try:
+            # 1. 分析SKU数差异
+            if sku_col and sku_col in comp_df.columns:
+                merged = pd.merge(
+                    own_df[[price_col, sku_col]],
+                    comp_df[[price_col, sku_col]],
+                    on=price_col, suffixes=('_own', '_comp')
+                )
+                
+                if not merged.empty:
+                    own_sku_col = f'{sku_col}_own'
+                    comp_sku_col = f'{sku_col}_comp'
+                    merged['sku_diff'] = merged[own_sku_col] - merged[comp_sku_col]
+                    merged['sku_diff_pct'] = merged.apply(
+                        lambda r: (r['sku_diff'] / r[comp_sku_col] * 100) if r[comp_sku_col] > 0 else 0, axis=1
+                    )
+                    
+                    # 找出本店落后的价格带（SKU数差异 < -20%）
+                    lagging = merged[merged['sku_diff_pct'] < -20].nsmallest(2, 'sku_diff_pct')
+                    for _, row in lagging.iterrows():
+                        price_band = row[price_col]
+                        own_sku = int(row[own_sku_col])
+                        comp_sku = int(row[comp_sku_col])
+                        diff_pct = abs(row['sku_diff_pct'])
+                        insights.append({
+                            'icon': '📉',
+                            'text': f'"{price_band}"SKU数落后{diff_pct:.0f}%（本店{own_sku}个 vs 竞对{comp_sku}个）',
+                            'level': 'warning'
+                        })
+                    
+                    # 找出本店领先的价格带（SKU数差异 > 20%）
+                    leading = merged[merged['sku_diff_pct'] > 20].nlargest(2, 'sku_diff_pct')
+                    for _, row in leading.iterrows():
+                        price_band = row[price_col]
+                        own_sku = int(row[own_sku_col])
+                        comp_sku = int(row[comp_sku_col])
+                        diff_pct = row['sku_diff_pct']
+                        insights.append({
+                            'icon': '📈',
+                            'text': f'"{price_band}"SKU数领先{diff_pct:.0f}%（本店{own_sku}个 vs 竞对{comp_sku}个）',
+                            'level': 'success'
+                        })
+            
+            # 2. 分析销售额差异
+            if revenue_col and revenue_col in comp_df.columns and len(insights) < 4:
+                merged_rev = pd.merge(
+                    own_df[[price_col, revenue_col]],
+                    comp_df[[price_col, revenue_col]],
+                    on=price_col, suffixes=('_own', '_comp')
+                )
+                
+                if not merged_rev.empty:
+                    own_rev_col = f'{revenue_col}_own'
+                    comp_rev_col = f'{revenue_col}_comp'
+                    merged_rev['rev_diff'] = merged_rev[own_rev_col] - merged_rev[comp_rev_col]
+                    
+                    # 找出销售额差异最大的价格带
+                    comp_leading = merged_rev[merged_rev['rev_diff'] < 0].nsmallest(1, 'rev_diff')
+                    for _, row in comp_leading.iterrows():
+                        price_band = row[price_col]
+                        own_rev = row[own_rev_col]
+                        comp_rev = row[comp_rev_col]
+                        diff = abs(row['rev_diff'])
+                        insights.append({
+                            'icon': '💰',
+                            'text': f'"{price_band}"竞对销售额领先¥{diff:,.0f}（竞对¥{comp_rev:,.0f} vs 本店¥{own_rev:,.0f}）',
+                            'level': 'info'
+                        })
+            
+        except Exception as e:
+            logger.warning(f"价格带差异分析失败: {e}")
+        
+        return insights[:4]
+    
+    @staticmethod
+    def generate_price_recommendations(insights):
+        """基于价格带洞察生成改进建议
+        
+        Args:
+            insights: 价格带洞察列表
+            
+        Returns:
+            建议列表（最多2条）
+        """
+        recommendations = []
+        seen_types = set()
+        
+        for insight in insights:
+            text = insight.get('text', '')
+            
+            if 'SKU数落后' in text:
+                if 'sku' not in seen_types:
+                    recommendations.append({
+                        'icon': '💡',
+                        'text': '建议：增加该价格带的商品数量，丰富价格带覆盖',
+                        'level': 'success'
+                    })
+                    seen_types.add('sku')
+            elif '销售额领先' in text and '竞对' in text:
+                if 'revenue' not in seen_types:
+                    recommendations.append({
+                        'icon': '💡',
+                        'text': '建议：加强该价格带的促销力度，提升销售额',
+                        'level': 'success'
+                    })
+                    seen_types.add('revenue')
+            
             if len(recommendations) >= 2:
                 break
         
@@ -2861,10 +3933,11 @@ class DashboardComponents:
         raw_active_sku = [int(v) if pd.notna(v) else 0 for v in category_data.iloc[:, 5]]
         raw_active_rate = [round(float(v) * 100, 1) if pd.notna(v) else 0 for v in category_data.iloc[:, 6]]
         
-        # 过滤掉数据全为0的分类（SKU总数和动销SKU数都为0）
+        # 过滤掉无效分类（SKU总数为0、动销SKU为0、动销率为0的分类不显示）
         categories, total_sku, active_sku, active_rate = [], [], [], []
         for i, cat in enumerate(raw_categories):
-            if raw_total_sku[i] > 0 or raw_active_sku[i] > 0:
+            # 只保留有SKU且有动销的分类
+            if raw_total_sku[i] > 0 and raw_active_sku[i] > 0 and raw_active_rate[i] > 0:
                 categories.append(cat)
                 total_sku.append(raw_total_sku[i])
                 active_sku.append(raw_active_sku[i])
@@ -2941,14 +4014,14 @@ class DashboardComponents:
                                 'type': 'linear',
                                 'x': 0, 'y': 0, 'x2': 0, 'y2': 1,
                                 'colorStops': [
-                                    {'offset': 0, 'color': '#BDC3C7'},
-                                    {'offset': 1, 'color': total_sku_color}
+                                    {'offset': 0, 'color': '#5DADE2'},
+                                    {'offset': 1, 'color': '#3498DB'}
                                 ]
                             },
                             'borderRadius': [4, 4, 0, 0],
-                            'opacity': 0.6
+                            'opacity': 0.85
                         },
-                        'label': {'show': True, 'position': 'top', 'fontSize': 9, 'color': '#7F8C8D'},
+                        'label': {'show': True, 'position': 'top', 'fontSize': 9, 'color': '#2980B9', 'fontWeight': 'bold'},
                         'barWidth': '30%',
                         'barGap': '-50%',
                         'z': 1
@@ -3232,281 +4305,44 @@ class DashboardComponents:
         return insights
     
     @staticmethod
-    def create_kpi_comparison_cards(own_kpi, competitor_kpi):
-        """创建KPI对比卡片组件
-        
-        Args:
-            own_kpi: 本店KPI字典
-            competitor_kpi: 竞对KPI字典
-            
-        Returns:
-            Dash组件
-        """
-        # 定义要对比的核心指标（19个，与单店视图保持一致）
-        comparison_metrics = [
-            # 第一行：SKU数量指标
-            {'key': '总SKU数(含规格)', 'title': '总SKU数(含规格)', 'icon': '📦', 'format': 'number'},
-            {'key': '总SKU数(去重后)', 'title': '总SKU数(去重后)', 'icon': '📋', 'format': 'number'},
-            {'key': '单规格SKU数', 'title': '单规格SKU数', 'icon': '📄', 'format': 'number'},
-            {'key': '多规格SKU总数', 'title': '多规格SKU总数', 'icon': '🧩', 'format': 'number'},
-            # 第二行：动销指标
-            {'key': '动销SKU数', 'title': '动销SKU数', 'icon': '📈', 'format': 'number'},
-            {'key': '滞销SKU数', 'title': '滞销SKU数', 'icon': '📉', 'format': 'number'},
-            {'key': '动销率', 'title': '动销率', 'icon': '💹', 'format': 'percent'},
-            {'key': '唯一多规格商品数', 'title': '唯一多规格商品数', 'icon': '🔀', 'format': 'number'},
-            # 第三行：销售指标
-            {'key': '总销售额(去重后)', 'title': '总销售额', 'icon': '💰', 'format': 'currency'},
-            {'key': '门店爆品数', 'title': '门店爆品数', 'icon': '🔥', 'format': 'number'},
-            {'key': '爆款集中度', 'title': '爆款集中度', 'icon': '🚀', 'format': 'percent'},
-            {'key': '平均SKU单价', 'title': '平均SKU单价', 'icon': '🔖', 'format': 'currency'},
-            # 第四行：价格与促销指标
-            {'key': '高价值SKU占比', 'title': '高价值SKU占比', 'icon': '💎', 'format': 'percent'},
-            {'key': '门店平均折扣', 'title': '门店平均折扣', 'icon': '🏷️', 'format': 'discount'},
-            {'key': '促销强度', 'title': '促销强度', 'icon': '📊', 'format': 'percent'},
-            # 第五行：成本与毛利指标
-            {'key': '总成本销售额', 'title': '总成本销售额', 'icon': '💸', 'format': 'currency'},
-            {'key': '总毛利', 'title': '总毛利', 'icon': '💵', 'format': 'currency'},
-            {'key': '平均毛利率', 'title': '平均毛利率', 'icon': '📊', 'format': 'percent'},
-            {'key': '高毛利商品数', 'title': '高毛利商品数', 'icon': '⭐', 'format': 'number'}
-        ]
-        
-        cards = []
-        
-        for metric in comparison_metrics:
-            key = metric['key']
-            
-            # 检查数据是否存在
-            if key not in own_kpi and key not in competitor_kpi:
-                continue
-            
-            own_val = own_kpi.get(key, 0)
-            comp_val = competitor_kpi.get(key, 0)
-            
-            # 确保数值类型
-            own_val = float(own_val) if own_val else 0
-            comp_val = float(comp_val) if comp_val else 0
-            
-            # 根据指标类型选择不同的ECharts图表
-            if metric['format'] == 'percent':
-                # 百分比类指标：使用双仪表盘
-                echarts_option = DashboardComponents._create_percent_comparison_echarts(
-                    metric['title'], metric['icon'], own_val, comp_val
-                )
-            elif metric['format'] == 'discount':
-                # 折扣类指标：使用特殊仪表盘
-                echarts_option = DashboardComponents._create_discount_comparison_echarts(
-                    metric['title'], metric['icon'], own_val, comp_val
-                )
-            elif metric['format'] == 'currency':
-                # 金额类指标：使用柱状图
-                echarts_option = DashboardComponents._create_currency_comparison_echarts(
-                    metric['title'], metric['icon'], own_val, comp_val
-                )
-            else:
-                # 数量类指标：使用柱状图
-                echarts_option = DashboardComponents._create_number_comparison_echarts(
-                    metric['title'], metric['icon'], own_val, comp_val
-                )
-            
-            echarts_card = dbc.Col(
-                html.Div([
-                    dash_echarts.DashECharts(
-                        option=echarts_option,
-                        style={'height': '180px', 'width': '100%'}
-                    )
-                ], style={'backgroundColor': 'white', 'borderRadius': '8px', 'padding': '5px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'}),
-                width=2, className="mb-3"
-            )
-            cards.append(echarts_card)
-        
-        return dbc.Row(cards)
-    
-    @staticmethod
-    def _create_number_comparison_echarts(title: str, icon: str, own_val: float, comp_val: float) -> dict:
-        """创建数量类KPI对比的ECharts配置（柱状图）"""
-        diff = own_val - comp_val
-        diff_pct = (diff / comp_val * 100) if comp_val != 0 else 0
-        
-        if own_val > comp_val:
-            own_color = '#27ae60'
-            status = f"↑ 领先 {abs(diff):,.0f}"
-        elif own_val < comp_val:
-            own_color = '#e74c3c'
-            status = f"↓ 落后 {abs(diff):,.0f}"
-        else:
-            own_color = '#7f8c8d'
-            status = "= 持平"
-        
-        return {
-            'title': {'text': f'{icon} {title}', 'left': 'center', 'top': 5, 'textStyle': {'fontSize': 11, 'fontWeight': 'bold'}},
-            'tooltip': {'trigger': 'axis'},
-            'grid': {'left': '15%', 'right': '10%', 'top': '32%', 'bottom': '22%'},
-            'xAxis': {'type': 'category', 'data': ['本店', '竞对'], 'axisLabel': {'fontSize': 10}},
-            'yAxis': {'type': 'value', 'axisLabel': {'fontSize': 9}, 'splitLine': {'lineStyle': {'type': 'dashed'}}},
-            'series': [{
-                'type': 'bar',
-                'data': [
-                    {'value': own_val, 'itemStyle': {'color': own_color}, 'label': {'show': True, 'position': 'top', 'fontSize': 10, 'formatter': f'{own_val:,.0f}'}},
-                    {'value': comp_val, 'itemStyle': {'color': '#3498db'}, 'label': {'show': True, 'position': 'top', 'fontSize': 10, 'formatter': f'{comp_val:,.0f}'}}
-                ],
-                'barWidth': '45%'
-            }],
-            'graphic': [{'type': 'text', 'left': 'center', 'bottom': 3, 'style': {'text': status, 'fontSize': 10, 'fill': own_color, 'fontWeight': 'bold'}}],
-            'toolbox': {'show': True, 'right': 3, 'top': 3, 'itemSize': 11, 'feature': {'saveAsImage': {'type': 'png', 'pixelRatio': 4, 'title': '下载', 'name': title, 'backgroundColor': '#fff'}}}
-        }
-    
-    @staticmethod
-    def _create_currency_comparison_echarts(title: str, icon: str, own_val: float, comp_val: float) -> dict:
-        """创建金额类KPI对比的ECharts配置（柱状图+货币格式）"""
-        diff = own_val - comp_val
-        diff_pct = (diff / comp_val * 100) if comp_val != 0 else 0
-        
-        if own_val > comp_val:
-            own_color = '#27ae60'
-            status = f"↑ 领先 ¥{abs(diff):,.0f}"
-        elif own_val < comp_val:
-            own_color = '#e74c3c'
-            status = f"↓ 落后 ¥{abs(diff):,.0f}"
-        else:
-            own_color = '#7f8c8d'
-            status = "= 持平"
-        
-        # 格式化显示值
-        def format_currency(val):
-            if val >= 10000:
-                return f"¥{val/10000:.1f}万"
-            return f"¥{val:,.0f}"
-        
-        return {
-            'title': {'text': f'{icon} {title}', 'left': 'center', 'top': 5, 'textStyle': {'fontSize': 11, 'fontWeight': 'bold'}},
-            'tooltip': {'trigger': 'axis'},
-            'grid': {'left': '15%', 'right': '10%', 'top': '32%', 'bottom': '22%'},
-            'xAxis': {'type': 'category', 'data': ['本店', '竞对'], 'axisLabel': {'fontSize': 10}},
-            'yAxis': {'type': 'value', 'axisLabel': {'fontSize': 9}, 'splitLine': {'lineStyle': {'type': 'dashed'}}},
-            'series': [{
-                'type': 'bar',
-                'data': [
-                    {'value': own_val, 'itemStyle': {'color': own_color}, 'label': {'show': True, 'position': 'top', 'fontSize': 9, 'formatter': format_currency(own_val)}},
-                    {'value': comp_val, 'itemStyle': {'color': '#3498db'}, 'label': {'show': True, 'position': 'top', 'fontSize': 9, 'formatter': format_currency(comp_val)}}
-                ],
-                'barWidth': '45%'
-            }],
-            'graphic': [{'type': 'text', 'left': 'center', 'bottom': 3, 'style': {'text': status, 'fontSize': 9, 'fill': own_color, 'fontWeight': 'bold'}}],
-            'toolbox': {'show': True, 'right': 3, 'top': 3, 'itemSize': 11, 'feature': {'saveAsImage': {'type': 'png', 'pixelRatio': 4, 'title': '下载', 'name': title, 'backgroundColor': '#fff'}}}
-        }
-    
-    @staticmethod
-    def _create_percent_comparison_echarts(title: str, icon: str, own_val: float, comp_val: float) -> dict:
-        """创建百分比类KPI对比的ECharts配置（双进度条）"""
-        # 转换为百分比显示值
-        own_pct = own_val * 100 if own_val <= 1 else own_val
-        comp_pct = comp_val * 100 if comp_val <= 1 else comp_val
-        
-        diff = own_pct - comp_pct
-        
-        if own_pct > comp_pct:
-            own_color = '#27ae60'
-            status = f"↑ 领先 {abs(diff):.1f}%"
-        elif own_pct < comp_pct:
-            own_color = '#e74c3c'
-            status = f"↓ 落后 {abs(diff):.1f}%"
-        else:
-            own_color = '#7f8c8d'
-            status = "= 持平"
-        
-        return {
-            'title': {'text': f'{icon} {title}', 'left': 'center', 'top': 5, 'textStyle': {'fontSize': 11, 'fontWeight': 'bold'}},
-            'tooltip': {'trigger': 'axis'},
-            'grid': {'left': '18%', 'right': '15%', 'top': '32%', 'bottom': '22%'},
-            'yAxis': {'type': 'category', 'data': ['竞对', '本店'], 'axisLabel': {'fontSize': 10}},
-            'xAxis': {'type': 'value', 'max': 100, 'axisLabel': {'fontSize': 9, 'formatter': '{value}%'}, 'splitLine': {'lineStyle': {'type': 'dashed'}}},
-            'series': [{
-                'type': 'bar',
-                'data': [
-                    {'value': comp_pct, 'itemStyle': {'color': '#3498db'}, 'label': {'show': True, 'position': 'right', 'fontSize': 10, 'formatter': f'{comp_pct:.1f}%'}},
-                    {'value': own_pct, 'itemStyle': {'color': own_color}, 'label': {'show': True, 'position': 'right', 'fontSize': 10, 'formatter': f'{own_pct:.1f}%'}}
-                ],
-                'barWidth': '40%'
-            }],
-            'graphic': [{'type': 'text', 'left': 'center', 'bottom': 3, 'style': {'text': status, 'fontSize': 10, 'fill': own_color, 'fontWeight': 'bold'}}],
-            'toolbox': {'show': True, 'right': 3, 'top': 3, 'itemSize': 11, 'feature': {'saveAsImage': {'type': 'png', 'pixelRatio': 4, 'title': '下载', 'name': title, 'backgroundColor': '#fff'}}}
-        }
-    
-    @staticmethod
-    def _create_discount_comparison_echarts(title: str, icon: str, own_val: float, comp_val: float) -> dict:
-        """创建折扣类KPI对比的ECharts配置（双进度条，折扣越低越好）"""
-        # 折扣值通常是0-10之间的数字，如7.8折
-        own_discount = own_val if own_val > 1 else own_val * 10
-        comp_discount = comp_val if comp_val > 1 else comp_val * 10
-        
-        diff = own_discount - comp_discount
-        
-        # 折扣越低越好（价格优势）
-        if own_discount < comp_discount:
-            own_color = '#27ae60'
-            status = f"↑ 更优惠 {abs(diff):.1f}折"
-        elif own_discount > comp_discount:
-            own_color = '#e74c3c'
-            status = f"↓ 折扣弱 {abs(diff):.1f}折"
-        else:
-            own_color = '#7f8c8d'
-            status = "= 持平"
-        
-        return {
-            'title': {'text': f'{icon} {title}', 'left': 'center', 'top': 5, 'textStyle': {'fontSize': 11, 'fontWeight': 'bold'}},
-            'tooltip': {'trigger': 'axis'},
-            'grid': {'left': '18%', 'right': '15%', 'top': '32%', 'bottom': '22%'},
-            'yAxis': {'type': 'category', 'data': ['竞对', '本店'], 'axisLabel': {'fontSize': 10}},
-            'xAxis': {'type': 'value', 'min': 0, 'max': 10, 'axisLabel': {'fontSize': 9, 'formatter': '{value}折'}, 'splitLine': {'lineStyle': {'type': 'dashed'}}},
-            'series': [{
-                'type': 'bar',
-                'data': [
-                    {'value': comp_discount, 'itemStyle': {'color': '#3498db'}, 'label': {'show': True, 'position': 'right', 'fontSize': 10, 'formatter': f'{comp_discount:.1f}折'}},
-                    {'value': own_discount, 'itemStyle': {'color': own_color}, 'label': {'show': True, 'position': 'right', 'fontSize': 10, 'formatter': f'{own_discount:.1f}折'}}
-                ],
-                'barWidth': '40%'
-            }],
-            'graphic': [{'type': 'text', 'left': 'center', 'bottom': 3, 'style': {'text': status, 'fontSize': 10, 'fill': own_color, 'fontWeight': 'bold'}}],
-            'toolbox': {'show': True, 'right': 3, 'top': 3, 'itemSize': 11, 'feature': {'saveAsImage': {'type': 'png', 'pixelRatio': 4, 'title': '下载', 'name': title, 'backgroundColor': '#fff'}}}
-        }
-    
-    @staticmethod
-    def create_multi_competitor_kpi_cards(own_kpi: dict, competitors_kpi: dict):
+    def create_multi_competitor_kpi_cards(own_kpi: dict, competitors_kpi: dict, own_store_name: str = '本店'):
         """创建多竞对KPI对比卡片组件
         
         Args:
             own_kpi: 本店KPI字典
             competitors_kpi: 竞对KPI字典 {competitor_name: {kpi_dict}}
+            own_store_name: 本店名称（用于图表显示）
             
         Returns:
             Dash组件
         """
         # 定义要对比的核心指标（19个，与单店视图保持一致）
+        # 每个指标配置包含: key, title, icon(emoji), format, color(本店柱子颜色)
         comparison_metrics = [
-            # 第一行：SKU数量指标
-            {'key': '总SKU数(含规格)', 'title': '总SKU数', 'icon': 'N', 'format': 'number'},
-            {'key': '总SKU数(去重后)', 'title': 'SKU去重', 'icon': 'U', 'format': 'number'},
-            {'key': '单规格SKU数', 'title': '单规格SKU', 'icon': 'S', 'format': 'number'},
-            {'key': '多规格SKU总数', 'title': '多规格SKU', 'icon': 'M', 'format': 'number'},
-            # 第二行：动销指标
-            {'key': '动销SKU数', 'title': '动销SKU', 'icon': '+', 'format': 'number'},
-            {'key': '滞销SKU数', 'title': '滞销SKU', 'icon': '-', 'format': 'number'},
-            {'key': '动销率', 'title': '动销率', 'icon': '%', 'format': 'percent'},
-            {'key': '唯一多规格商品数', 'title': '唯一多规格', 'icon': '#', 'format': 'number'},
-            # 第三行：销售指标
-            {'key': '总销售额(去重后)', 'title': '总销售额', 'icon': '$', 'format': 'currency'},
-            {'key': '门店爆品数', 'title': '爆品数', 'icon': '*', 'format': 'number'},
-            {'key': '爆款集中度', 'title': '爆款集中度', 'icon': '!', 'format': 'percent'},
-            {'key': '平均SKU单价', 'title': '平均单价', 'icon': 'P', 'format': 'currency'},
-            # 第四行：价格与促销指标
-            {'key': '高价值SKU占比', 'title': '高价值占比', 'icon': 'H', 'format': 'percent'},
-            {'key': '门店平均折扣', 'title': '平均折扣', 'icon': 'D', 'format': 'discount'},
-            {'key': '促销强度', 'title': '促销强度', 'icon': 'A', 'format': 'percent'},
-            # 第五行：成本与毛利指标
-            {'key': '总成本销售额', 'title': '成本销售额', 'icon': 'C', 'format': 'currency'},
-            {'key': '总毛利', 'title': '总毛利', 'icon': 'G', 'format': 'currency'},
-            {'key': '平均毛利率', 'title': '平均毛利率', 'icon': 'R', 'format': 'percent'},
-            {'key': '高毛利商品数', 'title': '高毛利商品', 'icon': 'T', 'format': 'number'}
+            # 第一行：SKU数量指标（蓝色系）
+            {'key': '总SKU数(含规格)', 'title': '总SKU数', 'icon': '📦', 'format': 'number', 'color': '#3498db'},
+            {'key': '总SKU数(去重后)', 'title': 'SKU去重', 'icon': '📋', 'format': 'number', 'color': '#2980b9'},
+            {'key': '单规格SKU数', 'title': '单规格SKU', 'icon': '📄', 'format': 'number', 'color': '#1abc9c'},
+            {'key': '多规格SKU总数', 'title': '多规格SKU', 'icon': '🧩', 'format': 'number', 'color': '#16a085'},
+            # 第二行：动销指标（绿色系）
+            {'key': '动销SKU数', 'title': '动销SKU', 'icon': '📈', 'format': 'number', 'color': '#27ae60'},
+            {'key': '滞销SKU数', 'title': '滞销SKU', 'icon': '📉', 'format': 'number', 'color': '#e74c3c'},
+            {'key': '动销率', 'title': '动销率', 'icon': '💹', 'format': 'percent', 'color': '#2ecc71'},
+            {'key': '唯一多规格商品数', 'title': '唯一多规格', 'icon': '🔀', 'format': 'number', 'color': '#1abc9c'},
+            # 第三行：销售指标（金色系）
+            {'key': '总销售额(去重后)', 'title': '总销售额', 'icon': '💰', 'format': 'currency', 'color': '#f1c40f'},
+            {'key': '门店爆品数', 'title': '爆品数', 'icon': '🔥', 'format': 'number', 'color': '#e67e22'},
+            {'key': '爆款集中度', 'title': '爆款集中度', 'icon': '🚀', 'format': 'percent', 'color': '#d35400'},
+            {'key': '平均SKU单价', 'title': '平均单价', 'icon': '🔖', 'format': 'currency', 'color': '#f39c12'},
+            # 第四行：价格与促销指标（紫色系）
+            {'key': '高价值SKU占比', 'title': '高价值占比', 'icon': '💎', 'format': 'percent', 'color': '#9b59b6'},
+            {'key': '门店平均折扣', 'title': '平均折扣', 'icon': '🏷️', 'format': 'discount', 'color': '#8e44ad'},
+            {'key': '促销强度', 'title': '促销强度', 'icon': '📊', 'format': 'percent', 'color': '#9b59b6'},
+            # 第五行：成本与毛利指标（红绿色）
+            {'key': '总成本销售额', 'title': '成本销售额', 'icon': '💸', 'format': 'currency', 'color': '#e74c3c'},
+            {'key': '总毛利', 'title': '总毛利', 'icon': '💵', 'format': 'currency', 'color': '#27ae60'},
+            {'key': '平均毛利率', 'title': '平均毛利率', 'icon': '📊', 'format': 'percent', 'color': '#2ecc71'},
+            {'key': '高毛利商品数', 'title': '高毛利商品', 'icon': '⭐', 'format': 'number', 'color': '#f1c40f'}
         ]
         
         # 竞对颜色配置（最多3个竞对）
@@ -3515,8 +4351,15 @@ class DashboardComponents:
         
         cards = []
         
+        # 对比模式下不展示的指标（数据不可比或意义不大）
+        skip_metrics = ['总SKU数(含规格)', '爆款集中度', '高价值SKU占比', '促销强度']
+        
         for metric in comparison_metrics:
             key = metric['key']
+            
+            # 跳过不展示的指标
+            if key in skip_metrics:
+                continue
             
             # 检查数据是否存在
             if key not in own_kpi:
@@ -3531,10 +4374,11 @@ class DashboardComponents:
                 comp_val = float(comp_kpi.get(key, 0) or 0)
                 comp_vals.append(comp_val)
             
-            # 根据指标类型选择不同的ECharts图表
+            # 根据指标类型选择不同的ECharts图表（传入本店颜色配置和门店名称）
+            own_color = metric.get('color', '#3498db')  # 使用指标配置的颜色
             echarts_option = DashboardComponents._create_multi_competitor_echarts(
                 metric['title'], metric['icon'], metric['format'],
-                own_val, comp_vals, competitor_names, competitor_colors
+                own_val, comp_vals, competitor_names, competitor_colors, own_color, own_store_name
             )
             
             echarts_card = dbc.Col(
@@ -3553,15 +4397,19 @@ class DashboardComponents:
     @staticmethod
     def _create_multi_competitor_echarts(title: str, icon: str, format_type: str,
                                           own_val: float, comp_vals: list, 
-                                          comp_names: list, comp_colors: list) -> dict:
-        """创建多竞对对比的ECharts配置"""
-        # 准备数据
-        categories = ['本店'] + [name[:6] + '...' if len(name) > 6 else name for name in comp_names]
-        values = [own_val] + comp_vals
+                                          comp_names: list, comp_colors: list,
+                                          metric_color: str = '#3498db',
+                                          own_store_name: str = '本店') -> dict:
+        """创建多竞对对比的ECharts配置
         
-        # 确定本店颜色（与最高值比较）
-        max_val = max(values) if values else 0
-        min_val = min(values) if values else 0
+        Args:
+            metric_color: 本店柱子的颜色（每个指标不同颜色）
+            own_store_name: 本店名称（用于X轴显示）
+        """
+        # 准备数据 - 门店名称截断显示
+        own_label = own_store_name[:6] + '...' if len(own_store_name) > 6 else own_store_name
+        categories = [own_label] + [name[:6] + '...' if len(name) > 6 else name for name in comp_names]
+        values = [own_val] + comp_vals
         
         # 格式化函数
         def format_value(val, fmt):
@@ -3578,46 +4426,38 @@ class DashboardComponents:
             else:
                 return f"{val:,.0f}"
         
-        # 构建数据系列
+        # 构建数据系列 - 本店使用指标配置的颜色
         data_items = []
-        own_color = '#27ae60'  # 默认绿色
         
-        # 判断本店表现
-        if format_type == 'discount':
-            # 折扣越低越好
-            if own_val <= min_val:
-                own_color = '#27ae60'
-            elif own_val >= max_val:
-                own_color = '#e74c3c'
-            else:
-                own_color = '#f39c12'
-        else:
-            # 其他指标越高越好
-            if own_val >= max_val:
-                own_color = '#27ae60'
-            elif own_val <= min_val:
-                own_color = '#e74c3c'
-            else:
-                own_color = '#f39c12'
-        
-        # 本店数据
+        # 本店数据 - 使用指标配置的颜色
         data_items.append({
             'value': own_val,
-            'itemStyle': {'color': own_color},
+            'itemStyle': {'color': metric_color},
             'label': {'show': True, 'position': 'top', 'fontSize': 9, 'formatter': format_value(own_val, format_type)}
         })
         
-        # 竞对数据
-        for i, (comp_val, comp_color) in enumerate(zip(comp_vals, comp_colors)):
+        # 竞对数据 - 使用灰色系区分
+        gray_colors = ['#95a5a6', '#7f8c8d', '#bdc3c7']
+        for i, comp_val in enumerate(comp_vals):
+            comp_color = gray_colors[i % len(gray_colors)]
             data_items.append({
                 'value': comp_val,
                 'itemStyle': {'color': comp_color},
                 'label': {'show': True, 'position': 'top', 'fontSize': 9, 'formatter': format_value(comp_val, format_type)}
             })
         
-        # 计算与第一个竞对的差异
+        # 计算与第一个竞对的差异，并确定状态颜色
+        status_color = metric_color  # 默认使用指标颜色
         if comp_vals:
             diff = own_val - comp_vals[0]
+            # 根据差异方向确定状态颜色
+            if format_type == 'discount':
+                # 折扣越低越好
+                status_color = '#27ae60' if diff <= 0 else '#e74c3c'
+            else:
+                # 其他指标越高越好
+                status_color = '#27ae60' if diff >= 0 else '#e74c3c'
+            
             if format_type == 'percent':
                 diff_pct = (own_val - comp_vals[0]) * 100 if own_val <= 1 else diff
                 status = f"vs竞对1: {'+' if diff_pct >= 0 else ''}{diff_pct:.1f}%"
@@ -3638,7 +4478,7 @@ class DashboardComponents:
             'xAxis': {'type': 'category', 'data': categories, 'axisLabel': {'fontSize': 9, 'rotate': 15}},
             'yAxis': {'type': 'value', 'axisLabel': {'fontSize': 8}, 'splitLine': {'lineStyle': {'type': 'dashed'}}},
             'series': [{'type': 'bar', 'data': data_items, 'barWidth': '50%'}],
-            'graphic': [{'type': 'text', 'left': 'center', 'bottom': 3, 'style': {'text': status, 'fontSize': 9, 'fill': own_color, 'fontWeight': 'bold'}}],
+            'graphic': [{'type': 'text', 'left': 'center', 'bottom': 3, 'style': {'text': status, 'fontSize': 9, 'fill': status_color, 'fontWeight': 'bold'}}],
             'toolbox': {'show': True, 'right': 3, 'top': 3, 'itemSize': 10, 'feature': {'saveAsImage': {'type': 'png', 'pixelRatio': 4, 'title': '下载', 'name': title, 'backgroundColor': '#fff'}}}
         }
     
@@ -3815,131 +4655,220 @@ class DashboardComponents:
     
     @staticmethod
     def create_discount_analysis(category_data):
-        """创建折扣商品分析图表"""
+        """创建折扣商品分析图表（ECharts版本 + 响应式）
+        
+        展示格式与一级分类动销分析一致：
+        - 分类SKU总数（蓝色宽柱，背景）
+        - 折扣SKU数（橙色窄柱，前景，重叠显示）
+        - 折扣渗透率（红色折线，右Y轴）
+        """
         if category_data.empty:
-            return dcc.Graph(figure=px.bar(title="暂无分类数据"), style={'height': '700px'})
+            return html.Div("暂无分类数据", className="text-center text-muted p-4")
         
-        print(f"💸 折扣数据维度: {category_data.shape}")
+        logger.info(f"💸 折扣数据维度: {category_data.shape}")
         
-        # 使用列名而非索引，避免列数不同导致的越界问题
+        # 使用列名而非索引
         try:
-            category_col = category_data['一级分类']
-            discount_sku_col = category_data['美团一级分类折扣sku数']
-            total_sku_col = category_data['美团一级分类sku数']
-            discount_revenue_col = category_data['售价销售额']
+            raw_categories = category_data['一级分类'].tolist()
+            raw_discount_sku = [int(v) if pd.notna(v) else 0 for v in category_data['美团一级分类折扣sku数']]
+            raw_total_sku = [int(v) if pd.notna(v) else 0 for v in category_data['美团一级分类sku数']]
         except KeyError as e:
-            print(f"⚠️ 折扣分析缺少必要列: {e}")
-            return dcc.Graph(figure=px.bar(title="数据列不完整"), style={'height': '700px'})
+            logger.warning(f"⚠️ 折扣分析缺少必要列: {e}")
+            return html.Div(f"数据列不完整: {e}", className="text-center text-warning p-4")
         
-        # 计算折扣SKU占比（折扣SKU / 总SKU）
-        discount_ratio = (discount_sku_col / total_sku_col * 100).fillna(0)
+        # 计算折扣渗透率（折扣SKU / 总SKU * 100）
+        raw_discount_rate = [round(d / t * 100, 1) if t > 0 else 0 for d, t in zip(raw_discount_sku, raw_total_sku)]
         
-        print(f"💸 使用列: 分类={category_col.name}, 折扣SKU数={discount_sku_col.name}, 折扣销售额={discount_revenue_col.name}")
+        # 过滤掉无效分类（SKU总数为0的分类不显示）
+        categories, total_sku, discount_sku, discount_rate = [], [], [], []
+        for i, cat in enumerate(raw_categories):
+            if raw_total_sku[i] > 0:
+                categories.append(cat)
+                total_sku.append(raw_total_sku[i])
+                discount_sku.append(raw_discount_sku[i])
+                discount_rate.append(raw_discount_rate[i])
         
-        # 创建双Y轴图表
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        if not categories:
+            return html.Div("所有分类数据为0", className="text-muted text-center p-5")
         
-        # 添加折扣SKU数量柱状图（深橙色）
-        fig.add_trace(
-            go.Bar(
-                x=category_col,
-                y=discount_sku_col,
-                name="折扣SKU数量",
-                marker_color='#ff7f0e',
-                opacity=0.8,
-                text=[int(val) if pd.notna(val) else 0 for val in discount_sku_col],
-                textposition='outside',
-                textfont=dict(size=10),
-                hovertemplate='折扣SKU数: %{text}<extra></extra>'
-            ),
-            secondary_y=False,
-        )
+        logger.info(f"💸 有效分类数: {len(categories)}, SKU总数: {sum(total_sku)}, 折扣SKU总数: {sum(discount_sku)}")
         
-        # 添加折扣销售额折线图（红色）
-        formatted_revenue = []
-        for val in discount_revenue_col:
-            if pd.notna(val):
-                formatted_revenue.append(f'{val:,.0f}')
-            else:
-                formatted_revenue.append('0')
+        # 配色方案（紫色系 - 与一级分类动销分析区分）
+        total_sku_color = '#9B59B6'  # 紫色（SKU总数）
+        discount_sku_color = '#1ABC9C'  # 青绿色（折扣SKU）
+        rate_color = '#E67E22'  # 橙色（折扣渗透率）
         
-        fig.add_trace(
-            go.Scatter(
-                x=category_col,
-                y=discount_revenue_col,
-                mode='lines+markers+text',
-                name="折扣销售额",
-                line=dict(color='red', width=3, dash='dot'),
-                marker=dict(size=8, color='red', symbol='diamond'),
-                text=formatted_revenue,
-                textposition='bottom center',
-                textfont=dict(size=9, color='red', family='Arial Black'),
-                hovertemplate='折扣销售额: ¥%{text}<extra></extra>'
-            ),
-            secondary_y=True,
-        )
-        
-        # 优化布局
-        fig.update_xaxes(
-            title_text="一级分类",
-            tickangle=45,
-            tickfont=dict(size=11),
-            title_font=dict(size=14)
-        )
-        fig.update_yaxes(
-            title_text="折扣SKU数量",
-            secondary_y=False,
-            tickfont=dict(size=12),
-            title_font=dict(size=14),
-            tickformat=',.0f',
-            separatethousands=True
-        )
-        fig.update_yaxes(
-            title_text="折扣销售额 (¥)",
-            secondary_y=True,
-            tickfont=dict(size=12),
-            title_font=dict(size=14),
-            tickformat=',.0f',
-            separatethousands=True
-        )
-        
-        fig.update_layout(
-            title={
-                'text': "💸 折扣商品供给与销售分析",
-                'x': 0.5,
-                'font': {'size': 20, 'color': '#2c3e50'}
+        option = {
+            'baseOption': {
+                'toolbox': {
+                    'show': True,
+                    'right': 20,
+                    'top': 5,
+                    'feature': {
+                        'saveAsImage': {
+                            'type': 'png',
+                            'pixelRatio': 4,
+                            'title': '下载高清图',
+                            'name': '折扣商品供给与销售分析',
+                            'backgroundColor': '#fff',
+                            'excludeComponents': ['toolbox']
+                        }
+                    }
+                },
+                'tooltip': {
+                    'trigger': 'axis',
+                    'axisPointer': {'type': 'cross'},
+                    'backgroundColor': 'rgba(50, 50, 50, 0.9)',
+                    'textStyle': {'color': '#fff'}
+                },
+                'legend': {
+                    'data': ['分类SKU总数', '折扣SKU数', '折扣渗透率'],
+                    'top': 5,
+                    'textStyle': {'fontSize': 12}
+                },
+                'grid': {'left': '5%', 'right': '5%', 'top': 45, 'bottom': 100, 'containLabel': True},
+                'xAxis': {
+                    'type': 'category',
+                    'data': categories,
+                    'axisLabel': {'rotate': 40, 'fontSize': 11, 'color': '#666'},
+                    'axisLine': {'lineStyle': {'color': '#ddd'}},
+                    'axisTick': {'show': False}
+                },
+                'yAxis': [
+                    {
+                        'type': 'value',
+                        'name': 'SKU数量',
+                        'nameTextStyle': {'fontSize': 12, 'color': '#666'},
+                        'axisLabel': {'fontSize': 11, 'color': '#666'},
+                        'splitLine': {'lineStyle': {'type': 'dashed', 'color': '#eee'}}
+                    },
+                    {
+                        'type': 'value',
+                        'name': '折扣渗透率(%)',
+                        'nameTextStyle': {'fontSize': 12, 'color': rate_color},
+                        'axisLabel': {'fontSize': 11, 'color': rate_color, 'formatter': '{value}%'},
+                        'splitLine': {'show': False},
+                        'max': 100
+                    }
+                ],
+                'series': [
+                    {
+                        'name': '分类SKU总数',
+                        'type': 'bar',
+                        'data': total_sku,
+                        'itemStyle': {
+                            'color': {
+                                'type': 'linear',
+                                'x': 0, 'y': 0, 'x2': 0, 'y2': 1,
+                                'colorStops': [
+                                    {'offset': 0, 'color': '#BB8FCE'},
+                                    {'offset': 1, 'color': total_sku_color}
+                                ]
+                            },
+                            'borderRadius': [4, 4, 0, 0],
+                            'opacity': 0.85
+                        },
+                        'label': {'show': True, 'position': 'top', 'fontSize': 9, 'color': '#8E44AD', 'fontWeight': 'bold'},
+                        'barWidth': '30%',
+                        'barGap': '-50%',
+                        'z': 1
+                    },
+                    {
+                        'name': '折扣SKU数',
+                        'type': 'bar',
+                        'data': discount_sku,
+                        'itemStyle': {
+                            'color': {
+                                'type': 'linear',
+                                'x': 0, 'y': 0, 'x2': 0, 'y2': 1,
+                                'colorStops': [
+                                    {'offset': 0, 'color': '#48C9B0'},
+                                    {'offset': 1, 'color': discount_sku_color}
+                                ]
+                            },
+                            'borderRadius': [4, 4, 0, 0]
+                        },
+                        'label': {'show': True, 'position': 'top', 'fontSize': 9, 'color': '#16A085', 'fontWeight': 'bold'},
+                        'barWidth': '20%',
+                        'z': 2
+                    },
+                    {
+                        'name': '折扣渗透率',
+                        'type': 'line',
+                        'yAxisIndex': 1,
+                        'data': discount_rate,
+                        'symbol': 'circle',
+                        'symbolSize': 8,
+                        'lineStyle': {'width': 3, 'color': rate_color},
+                        'itemStyle': {'color': rate_color},
+                        'label': {
+                            'show': True,
+                            'position': 'top',
+                            'fontSize': 10,
+                            'color': '#D35400',
+                            'fontWeight': 'bold',
+                            'formatter': '{c}%'
+                        },
+                        'areaStyle': {
+                            'color': {
+                                'type': 'linear',
+                                'x': 0, 'y': 0, 'x2': 0, 'y2': 1,
+                                'colorStops': [
+                                    {'offset': 0, 'color': 'rgba(230, 126, 34, 0.3)'},
+                                    {'offset': 1, 'color': 'rgba(230, 126, 34, 0.05)'}
+                                ]
+                            }
+                        }
+                    }
+                ],
+                'animationEasing': 'elasticOut',
+                'animationDuration': 1000
             },
-            height=700,
-            margin=dict(l=80, r=80, t=100, b=150),
-            showlegend=True,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="center",
-                x=0.5,
-                font=dict(size=13)
-            ),
-            font=dict(size=12),
-            hovermode='x',
-            paper_bgcolor='white',
-            plot_bgcolor='white',
-            bargap=0.2
-        )
+            'media': [
+                {
+                    'query': {'maxWidth': 600},
+                    'option': {
+                        'legend': {'top': 35, 'textStyle': {'fontSize': 9}},
+                        'grid': {'top': 70, 'bottom': 80},
+                        'xAxis': {'axisLabel': {'fontSize': 8, 'rotate': 50}},
+                        'yAxis': [
+                            {'axisLabel': {'fontSize': 9}},
+                            {'axisLabel': {'fontSize': 9}}
+                        ],
+                        'series': [
+                            {'barWidth': '25%', 'label': {'show': False}},
+                            {'barWidth': '15%', 'label': {'show': False}},
+                            {'symbolSize': 6, 'label': {'fontSize': 8}}
+                        ]
+                    }
+                },
+                {
+                    'query': {'minWidth': 1200},
+                    'option': {
+                        'legend': {'top': 50, 'textStyle': {'fontSize': 14}},
+                        'grid': {'top': 100, 'bottom': 120},
+                        'xAxis': {'axisLabel': {'fontSize': 13}},
+                        'yAxis': [
+                            {'axisLabel': {'fontSize': 13}},
+                            {'axisLabel': {'fontSize': 13}}
+                        ],
+                        'series': [
+                            {'barWidth': '35%', 'label': {'fontSize': 11}},
+                            {'barWidth': '25%', 'label': {'fontSize': 11}},
+                            {'symbolSize': 10, 'label': {'fontSize': 12}}
+                        ]
+                    }
+                }
+            ]
+        }
         
         # 生成洞察
         insights = DashboardComponents.generate_discount_insights(category_data)
         
         return html.Div([
-            dcc.Graph(
-                figure=fig,
-                style={'height': '700px', 'width': '100%'},
-                config={
-                    'displayModeBar': True,
-                    'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
-                    'displaylogo': False,
-                    'responsive': True
-                }
+            dash_echarts.DashECharts(
+                option=option,
+                style={'height': '600px', 'width': '100%'}
             ),
             DashboardComponents.create_insights_panel(insights) if insights else html.Div()
         ])
@@ -7712,18 +8641,28 @@ def update_kpi_cards(upload_trigger, comparison_mode, selected_competitors, comp
                 insights_panel = DashboardComponents.create_insights_panel(insights) if insights else html.Div()
                 return cards, insights_panel
             
+            # 获取当前门店名称
+            own_store_name = store_manager.current_store or '本店'
+            
             # 创建多竞对对比卡片
-            comparison_cards = DashboardComponents.create_multi_competitor_kpi_cards(own_kpi, competitors_kpi)
+            comparison_cards = DashboardComponents.create_multi_competitor_kpi_cards(own_kpi, competitors_kpi, own_store_name)
             
             # 生成KPI差异分析洞察（使用第一个竞对作为主要对比对象）
             first_competitor = list(competitors_kpi.keys())[0]
-            kpi_insights = DifferenceAnalyzer.analyze_kpi_differences(own_kpi, competitors_kpi[first_competitor])
+            first_comp_kpi = competitors_kpi[first_competitor]
+            logger.info(f"📊 差异分析 - 本店KPI keys: {list(own_kpi.keys())[:5]}...")
+            logger.info(f"📊 差异分析 - 竞对KPI keys: {list(first_comp_kpi.keys())[:5] if isinstance(first_comp_kpi, dict) else type(first_comp_kpi)}...")
+            
+            kpi_insights = DifferenceAnalyzer.analyze_kpi_differences(own_kpi, first_comp_kpi)
+            logger.info(f"📊 差异分析洞察数量: {len(kpi_insights)}")
             
             # 生成改进建议
             recommendations = DifferenceAnalyzer.generate_recommendations(kpi_insights)
+            logger.info(f"📊 改进建议数量: {len(recommendations)}")
             
             # 合并洞察和建议
             all_insights = kpi_insights + recommendations
+            logger.info(f"📊 总洞察数量: {len(all_insights)}")
             
             # 创建差异分析面板
             if all_insights:
@@ -7808,8 +8747,11 @@ def update_category_sales(upload_trigger, selected_categories, comparison_mode, 
             if selected_categories and len(selected_categories) > 0:
                 competitor_df = competitor_df[competitor_df.iloc[:, 0].isin(selected_categories)]
             
+            # 获取本店名称
+            own_store_name = store_manager.current_store or '本店'
+            
             # 创建对比视图（显示多竞对提示）
-            comparison_view = create_category_comparison_view(category_data, competitor_df, first_competitor)
+            comparison_view = create_category_comparison_view(category_data, competitor_df, first_competitor, own_store_name)
             
             # 如果有多个竞对，添加提示
             if len(selected_competitors) > 1:
@@ -7870,7 +8812,9 @@ def update_multispec_supply(upload_trigger, selected_categories, comparison_mode
             
             # 使用第一个竞对进行对比
             selected_competitor = selected_competitors[0]
-            logger.info(f"🔀 多规格供给分析 - 对比模式: 本店 vs {selected_competitor}")
+            # 获取本店名称
+            own_store_name = store_manager.current_store or '本店'
+            logger.info(f"🔀 多规格供给分析 - 对比模式: {own_store_name} vs {selected_competitor}")
             
             # 从缓存获取竞对数据
             comp_data = competitor_cache.get(selected_competitor, {})
@@ -7891,21 +8835,21 @@ def update_multispec_supply(upload_trigger, selected_categories, comparison_mode
                     competitor_df = competitor_df[competitor_df.iloc[:, 0].isin(selected_categories)]
                 
                 # 生成对比洞察卡片
-                comparison_cards = create_multispec_comparison_cards(category_data, competitor_df, selected_competitor)
+                comparison_cards = create_multispec_comparison_cards(category_data, competitor_df, selected_competitor, own_store_name)
                 
                 # 生成3个对比图表
                 logger.info(f"📈 开始生成多规格对比图表...")
                 ratio_chart = create_multispec_comparison_echarts(category_data, competitor_df, selected_competitor)
                 logger.info(f"📊 图表1生成完成: yAxis.data长度={len(ratio_chart.get('yAxis', {}).get('data', []))}")
                 
-                sku_chart = create_multispec_sku_comparison_echarts(category_data, competitor_df, selected_competitor)
+                sku_chart = create_multispec_sku_comparison_echarts(category_data, competitor_df, selected_competitor, own_store_name)
                 logger.info(f"📊 图表2生成完成: xAxis.data长度={len(sku_chart.get('xAxis', {}).get('data', []))}")
                 
-                structure_chart = create_multispec_structure_comparison_echarts(category_data, competitor_df, selected_competitor)
+                structure_chart = create_multispec_structure_comparison_echarts(category_data, competitor_df, selected_competitor, own_store_name)
                 logger.info(f"📊 图表3生成完成: xAxis.data长度={len(structure_chart.get('xAxis', {}).get('data', []))}")
                 
                 # 生成对比洞察
-                comparison_insights = generate_multispec_comparison_insights(category_data, competitor_df, selected_competitor)
+                comparison_insights = generate_multispec_comparison_insights(category_data, competitor_df, selected_competitor, own_store_name)
                 comparison_insights_display = create_multispec_insights_display(comparison_insights)
                 logger.info(f"💡 洞察生成完成: {len(comparison_insights)} 条")
                 
@@ -7975,7 +8919,7 @@ def update_multispec_supply(upload_trigger, selected_categories, comparison_mode
         ], className="p-3")
 
 
-def create_multispec_comparison_cards(own_data: pd.DataFrame, competitor_data: pd.DataFrame, competitor_name: str):
+def create_multispec_comparison_cards(own_data: pd.DataFrame, competitor_data: pd.DataFrame, competitor_name: str, own_store_name: str = '本店'):
     """创建多规格对比洞察卡片"""
     
     # 计算统计数据
@@ -8068,17 +9012,58 @@ def create_multispec_comparison_cards(own_data: pd.DataFrame, competitor_data: p
 @app.callback(
     Output('discount-analysis', 'children'),
     [Input('upload-trigger', 'data'),
-     Input('category-filter-state', 'data')]
+     Input('category-filter-state', 'data'),
+     Input('comparison-mode', 'data'),
+     Input('selected-competitor', 'data'),
+     Input('competitor-data-cache', 'data')]
 )
-def update_discount_analysis(upload_trigger, selected_categories):
-    """更新折扣商品分析"""
+def update_discount_analysis(upload_trigger, selected_categories, comparison_mode, selected_competitors, competitor_cache):
+    """更新折扣商品分析（支持对比模式）"""
     try:
+        # 获取本店数据
         category_data = loader.get_category_analysis()
         if selected_categories and len(selected_categories) > 0:
             category_data = category_data[category_data.iloc[:, 0].isin(selected_categories)]
-        return DashboardComponents.create_discount_analysis(category_data)
+        
+        # 检查是否为对比模式
+        logger.info(f"🔍 折扣分析检查: comparison_mode={comparison_mode}, selected_competitors={selected_competitors}")
+        
+        if comparison_mode == 'on' and selected_competitors and competitor_cache:
+            # 确保是列表格式
+            if isinstance(selected_competitors, str):
+                selected_competitors = [selected_competitors]
+            
+            logger.info(f"💸 折扣分析：对比模式 ({len(selected_competitors)}个竞对)")
+            
+            # 使用第一个竞对进行对比
+            first_competitor = selected_competitors[0]
+            comp_data = competitor_cache.get(first_competitor, {})
+            competitor_category = comp_data.get('category', []) if comp_data else []
+            
+            if not competitor_category:
+                logger.warning("⚠️ 竞对分类数据为空，显示单店视图")
+                return DashboardComponents.create_discount_analysis(category_data)
+            
+            # 转换为DataFrame
+            competitor_df = pd.DataFrame(competitor_category)
+            
+            # 应用相同的分类筛选
+            if selected_categories and len(selected_categories) > 0:
+                competitor_df = competitor_df[competitor_df.iloc[:, 0].isin(selected_categories)]
+            
+            # 获取本店名称
+            own_store_name = store_manager.current_store or '本店'
+            
+            # 创建对比视图
+            return create_discount_comparison_view(category_data, competitor_df, first_competitor, own_store_name, selected_competitors)
+        else:
+            # 单店视图
+            return DashboardComponents.create_discount_analysis(category_data)
+            
     except Exception as e:
-        print(f"折扣分析更新错误: {e}")
+        import traceback
+        logger.error(f"❌ 折扣分析更新错误: {e}")
+        logger.error(traceback.format_exc())
         return html.Div("折扣数据加载失败")
 
 @app.callback(
@@ -9626,8 +10611,200 @@ def run_competitor_analysis(n_clicks, file_contents, filename, competitor_name, 
         return error_msg, current_trigger, dash.no_update, dash.no_update  # 错误时不切换TAB和门店
 
 
-# ========== 旧的对比看板代码已删除 ==========
-# 新的对比分析功能正在重构中
+# ========== 对比看板渲染辅助函数 ==========
+
+def render_kpi_comparison(own_kpi, competitor_kpi):
+    """渲染KPI对比卡片"""
+    try:
+        cards = []
+        metrics = [
+            ('总销售额(去重后)', '💰 销售额', True),
+            ('总SKU数(去重后)', '📦 SKU数', False),
+            ('动销率', '📈 动销率', False),
+            ('平均毛利率', '💹 毛利率', False)
+        ]
+        
+        for key, label, is_currency in metrics:
+            own_val = own_kpi.get(key, 0) or 0
+            comp_val = competitor_kpi.get(key, 0) or 0
+            
+            try:
+                own_val = float(own_val)
+                comp_val = float(comp_val)
+            except:
+                own_val, comp_val = 0, 0
+            
+            diff = own_val - comp_val
+            diff_color = '#27ae60' if diff >= 0 else '#e74c3c'
+            
+            if is_currency:
+                own_text = f"¥{own_val:,.0f}"
+                comp_text = f"¥{comp_val:,.0f}"
+                diff_text = f"+¥{diff:,.0f}" if diff >= 0 else f"¥{diff:,.0f}"
+            elif '率' in label:
+                own_text = f"{own_val:.1f}%"
+                comp_text = f"{comp_val:.1f}%"
+                diff_text = f"+{diff:.1f}%" if diff >= 0 else f"{diff:.1f}%"
+            else:
+                own_text = f"{int(own_val):,}"
+                comp_text = f"{int(comp_val):,}"
+                diff_text = f"+{int(diff):,}" if diff >= 0 else f"{int(diff):,}"
+            
+            cards.append(
+                dbc.Col([
+                    html.Div([
+                        html.Div(label, style={'fontSize': '12px', 'color': '#7f8c8d', 'marginBottom': '5px'}),
+                        html.Div([
+                            html.Span(f"本店: {own_text}", style={'color': '#1ABC9C', 'fontWeight': 'bold'}),
+                            html.Span(" vs ", style={'color': '#95a5a6', 'margin': '0 5px'}),
+                            html.Span(f"竞对: {comp_text}", style={'color': '#95a5a6'})
+                        ], style={'fontSize': '14px'}),
+                        html.Div(f"差异: {diff_text}", style={'fontSize': '13px', 'color': diff_color, 'fontWeight': 'bold', 'marginTop': '3px'})
+                    ], style={'backgroundColor': '#f8f9fa', 'padding': '12px', 'borderRadius': '8px', 'textAlign': 'center'})
+                ], md=3)
+            )
+        
+        return dbc.Row(cards)
+    except Exception as e:
+        logger.error(f"KPI对比渲染失败: {e}")
+        return html.Div("KPI对比数据加载失败", className="text-muted")
+
+
+def render_category_comparison(own_category, competitor_category):
+    """渲染分类销售额对比图"""
+    try:
+        if not own_category or not competitor_category:
+            return html.Div("分类数据不足", className="text-muted text-center p-3")
+        
+        own_df = pd.DataFrame(own_category)
+        comp_df = pd.DataFrame(competitor_category)
+        
+        if own_df.empty or comp_df.empty:
+            return html.Div("分类数据为空", className="text-muted text-center p-3")
+        
+        # 获取列名
+        cat_col = own_df.columns[0]
+        rev_col = None
+        for col in own_df.columns:
+            if '销售额' in str(col) or '金额' in str(col):
+                rev_col = col
+                break
+        if not rev_col and len(own_df.columns) > 1:
+            rev_col = own_df.columns[1]
+        
+        if not rev_col:
+            return html.Div("未找到销售额列", className="text-muted text-center p-3")
+        
+        # 取TOP10
+        own_top = own_df.nlargest(10, rev_col)[[cat_col, rev_col]].rename(columns={rev_col: '本店销售额'})
+        comp_top = comp_df.nlargest(10, rev_col)[[cat_col, rev_col]].rename(columns={rev_col: '竞对销售额'})
+        
+        merged = pd.merge(own_top, comp_top, on=cat_col, how='outer').fillna(0)
+        
+        # 创建ECharts图表
+        categories = merged[cat_col].tolist()
+        own_values = merged['本店销售额'].tolist()
+        comp_values = merged['竞对销售额'].tolist()
+        
+        echarts_option = {
+            'tooltip': {'trigger': 'axis', 'axisPointer': {'type': 'shadow'}},
+            'legend': {'data': ['本店', '竞对'], 'top': 5},
+            'grid': {'left': '3%', 'right': '4%', 'bottom': '15%', 'top': '40px', 'containLabel': True},
+            'xAxis': {'type': 'category', 'data': categories, 'axisLabel': {'rotate': 30, 'fontSize': 10}},
+            'yAxis': {'type': 'value', 'name': '销售额'},
+            'series': [
+                {'name': '本店', 'type': 'bar', 'data': own_values, 'itemStyle': {'color': '#1ABC9C'}},
+                {'name': '竞对', 'type': 'bar', 'data': comp_values, 'itemStyle': {'color': '#95a5a6'}}
+            ]
+        }
+        
+        return dash_echarts.DashECharts(option=echarts_option, style={'height': '350px', 'width': '100%'})
+    except Exception as e:
+        logger.error(f"分类对比渲染失败: {e}")
+        return html.Div("分类对比数据加载失败", className="text-muted")
+
+
+def render_price_comparison(own_price, competitor_price):
+    """渲染价格带分布对比图（使用最新的对比视图组件，包含洞察和差异分析引擎）"""
+    try:
+        if not own_price or not competitor_price:
+            return html.Div("价格带数据不足", className="text-muted text-center p-3")
+        
+        own_df = pd.DataFrame(own_price)
+        comp_df = pd.DataFrame(competitor_price)
+        
+        if own_df.empty or comp_df.empty:
+            return html.Div("价格带数据为空", className="text-muted text-center p-3")
+        
+        # 使用最新的价格带对比视图组件（包含洞察和差异分析引擎）
+        return create_price_comparison_view(own_df, comp_df, '竞对', '本店')
+    except Exception as e:
+        logger.error(f"价格带对比渲染失败: {e}")
+        return html.Div("价格带对比数据加载失败", className="text-muted")
+
+
+def render_radar_comparison(own_kpi, competitor_kpi):
+    """渲染综合指标雷达图"""
+    try:
+        # 定义雷达图指标
+        indicators = [
+            {'name': '销售额', 'max': 100},
+            {'name': 'SKU数', 'max': 100},
+            {'name': '动销率', 'max': 100},
+            {'name': '毛利率', 'max': 100}
+        ]
+        
+        # 归一化数据
+        def normalize(own_val, comp_val):
+            max_val = max(own_val, comp_val, 1)
+            return (own_val / max_val * 100, comp_val / max_val * 100)
+        
+        own_sales = float(own_kpi.get('总销售额(去重后)', 0) or 0)
+        comp_sales = float(competitor_kpi.get('总销售额(去重后)', 0) or 0)
+        own_sku = float(own_kpi.get('总SKU数(去重后)', 0) or 0)
+        comp_sku = float(competitor_kpi.get('总SKU数(去重后)', 0) or 0)
+        own_rate = float(own_kpi.get('动销率', 0) or 0)
+        comp_rate = float(competitor_kpi.get('动销率', 0) or 0)
+        own_margin = float(own_kpi.get('平均毛利率', 0) or 0)
+        comp_margin = float(competitor_kpi.get('平均毛利率', 0) or 0)
+        
+        own_data = [
+            normalize(own_sales, comp_sales)[0],
+            normalize(own_sku, comp_sku)[0],
+            own_rate,
+            own_margin
+        ]
+        comp_data = [
+            normalize(own_sales, comp_sales)[1],
+            normalize(own_sku, comp_sku)[1],
+            comp_rate,
+            comp_margin
+        ]
+        
+        echarts_option = {
+            'tooltip': {'trigger': 'item'},
+            'legend': {'data': ['本店', '竞对'], 'top': 5},
+            'radar': {
+                'indicator': indicators,
+                'center': ['50%', '55%'],
+                'radius': '65%'
+            },
+            'series': [{
+                'type': 'radar',
+                'data': [
+                    {'value': own_data, 'name': '本店', 'itemStyle': {'color': '#1ABC9C'}, 'areaStyle': {'opacity': 0.3}},
+                    {'value': comp_data, 'name': '竞对', 'itemStyle': {'color': '#95a5a6'}, 'areaStyle': {'opacity': 0.3}}
+                ]
+            }]
+        }
+        
+        return dash_echarts.DashECharts(option=echarts_option, style={'height': '350px', 'width': '100%'})
+    except Exception as e:
+        logger.error(f"雷达图渲染失败: {e}")
+        return html.Div("雷达图数据加载失败", className="text-muted")
+
+
+def render_comparison_dashboard(own_data, competitor_data, data_source):
     """渲染对比分析看板内容（不包含选择器，选择器在布局中固定）"""
     global _last_comparison_hash
     
@@ -10027,4 +11204,5 @@ if __name__ == '__main__':
         use_reloader=True,  # 启用热重载
         dev_tools_hot_reload=True  # 启用Dash热重载
     )
+
 

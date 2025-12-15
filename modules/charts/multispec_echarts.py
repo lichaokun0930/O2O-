@@ -334,13 +334,14 @@ def create_multispec_comparison_echarts(own_data: pd.DataFrame, competitor_data:
     }
 
 
-def create_multispec_sku_comparison_echarts(own_data: pd.DataFrame, competitor_data: pd.DataFrame, competitor_name: str) -> dict:
+def create_multispec_sku_comparison_echarts(own_data: pd.DataFrame, competitor_data: pd.DataFrame, competitor_name: str, own_store_name: str = '本店') -> dict:
     """创建多规格SKU数量对比ECharts配置（图表2：分组柱状图）
     
     Args:
         own_data: 本店分类数据
         competitor_data: 竞对分类数据
         competitor_name: 竞对名称
+        own_store_name: 本店名称（用于图例显示）
         
     Returns:
         ECharts配置字典
@@ -421,7 +422,7 @@ def create_multispec_sku_comparison_echarts(own_data: pd.DataFrame, competitor_d
             'axisPointer': {'type': 'shadow'}
         },
         'legend': {
-            'data': ['本店多规格SKU', f'{competitor_name}多规格SKU'],
+            'data': ['本店多规格SKU', '竞对多规格SKU'],
             'top': 5
         },
         'grid': {
@@ -454,7 +455,7 @@ def create_multispec_sku_comparison_echarts(own_data: pd.DataFrame, competitor_d
                 }
             },
             {
-                'name': f'{competitor_name}多规格SKU',
+                'name': '竞对多规格SKU',
                 'type': 'bar',
                 'data': [{'value': v, 'label': {'show': v > 0}} for v in comp_multi_list],
                 'itemStyle': {'color': '#e74c3c'},
@@ -468,7 +469,7 @@ def create_multispec_sku_comparison_echarts(own_data: pd.DataFrame, competitor_d
     }
 
 
-def create_multispec_structure_comparison_echarts(own_data: pd.DataFrame, competitor_data: pd.DataFrame, competitor_name: str) -> dict:
+def create_multispec_structure_comparison_echarts(own_data: pd.DataFrame, competitor_data: pd.DataFrame, competitor_name: str, own_store_name: str = '本店') -> dict:
     """创建多规格占比分组对比ECharts配置（图表3：分组柱状图）
     
     改进版：直接对比本店和竞对的多规格占比，更直观
@@ -477,6 +478,7 @@ def create_multispec_structure_comparison_echarts(own_data: pd.DataFrame, compet
         own_data: 本店分类数据
         competitor_data: 竞对分类数据
         competitor_name: 竞对名称
+        own_store_name: 本店名称（用于图例显示）
         
     Returns:
         ECharts配置字典
@@ -561,7 +563,7 @@ def create_multispec_structure_comparison_echarts(own_data: pd.DataFrame, compet
             'axisPointer': {'type': 'shadow'}
         },
         'legend': {
-            'data': ['本店', competitor_name],
+            'data': ['本店', '竞对'],
             'top': 5
         },
         'grid': {
@@ -596,7 +598,7 @@ def create_multispec_structure_comparison_echarts(own_data: pd.DataFrame, compet
                 'barGap': '10%'
             },
             {
-                'name': competitor_name,
+                'name': '竞对',
                 'type': 'bar',
                 'data': comp_labeled_data,
                 'itemStyle': {'color': '#e74c3c'},
@@ -610,13 +612,14 @@ def create_multispec_structure_comparison_echarts(own_data: pd.DataFrame, compet
     }
 
 
-def generate_multispec_comparison_insights(own_data: pd.DataFrame, competitor_data: pd.DataFrame, competitor_name: str) -> list:
+def generate_multispec_comparison_insights(own_data: pd.DataFrame, competitor_data: pd.DataFrame, competitor_name: str, own_store_name: str = '本店') -> list:
     """生成多规格对比洞察
     
     Args:
         own_data: 本店分类数据
         competitor_data: 竞对分类数据
         competitor_name: 竞对名称
+        own_store_name: 本店名称（用于洞察文本显示）
         
     Returns:
         洞察列表
@@ -802,13 +805,14 @@ def create_multispec_insights_display(insights: list):
     return html.Div(items, style={'padding': '10px'})
 
 
-def create_multispec_comparison_kpi_cards(own_data: pd.DataFrame, competitor_data: pd.DataFrame, competitor_name: str):
+def create_multispec_comparison_kpi_cards(own_data: pd.DataFrame, competitor_data: pd.DataFrame, competitor_name: str, own_store_name: str = '本店'):
     """创建多规格对比KPI卡片
     
     Args:
         own_data: 本店分类数据
         competitor_data: 竞对分类数据
         competitor_name: 竞对名称
+        own_store_name: 本店名称（用于显示）
         
     Returns:
         Dash组件
@@ -872,11 +876,11 @@ def create_multispec_comparison_kpi_cards(own_data: pd.DataFrame, competitor_dat
         return html.Div([
             html.Div(title, style={'fontSize': '12px', 'color': '#7f8c8d', 'marginBottom': '5px'}),
             html.Div([
-                html.Span(f'本店: ', style={'fontSize': '11px', 'color': '#666'}),
+                html.Span('本店: ', style={'fontSize': '11px', 'color': '#666'}),
                 html.Span(f'{own_value}{unit}', style={'fontSize': '16px', 'fontWeight': 'bold', 'color': '#3498db'}),
             ]),
             html.Div([
-                html.Span(f'竞对: ', style={'fontSize': '11px', 'color': '#666'}),
+                html.Span('竞对: ', style={'fontSize': '11px', 'color': '#666'}),
                 html.Span(f'{comp_value}{unit}', style={'fontSize': '16px', 'fontWeight': 'bold', 'color': '#e74c3c'}),
             ]),
             html.Div([
