@@ -1,0 +1,4 @@
+# file: D:\Python\历史数据看板\O2O-\modules\data\loader.py
+# hypothesis_version: 6.148.7
+
+['category_l1', 'data', 'kpi', 'price_analysis', 'role_analysis', 'sheet_names', 'sku_details', '动销SKU数', '动销率', '单规格SKU数', '单规格SPU数', '唯一多规格商品数', '多规格SKU总数', '总SKU数(去重后)', '总SKU数(含规格)', '总销售额(去重后)', '滞销SKU数', '门店', '📊 数据加载完成:']

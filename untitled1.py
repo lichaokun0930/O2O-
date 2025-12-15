@@ -490,6 +490,20 @@ def identify_multi_spec_products(df):
     else:
         result['多规格依据'] = result.apply(get_trigger_for_row, axis=1)
     
+    # 【修复】去重：同一门店+商品名+规格只保留一条，避免原始数据重复导致的多余行
+    rows_before_dedup = len(result)
+    dedup_cols = ['Store', 'product_name', 'variant_key'] if has_store else ['product_name', 'variant_key']
+    dedup_cols = [c for c in dedup_cols if c in result.columns]
+    if dedup_cols:
+        # 先按销量降序排序，确保保留销量最高的记录
+        sort_cols = ['sales_qty'] if 'sales_qty' in result.columns else []
+        if sort_cols:
+            result = result.sort_values(by=sort_cols, ascending=False, na_position='last')
+        result = result.drop_duplicates(subset=dedup_cols, keep='first')
+        rows_after_dedup = len(result)
+        if rows_before_dedup != rows_after_dedup:
+            print(f"ℹ️ 多规格数据去重：{rows_before_dedup}行 → {rows_after_dedup}行（移除{rows_before_dedup - rows_after_dedup}条重复记录）")
+    
     print(f"ℹ️ 多规格商品识别完成，共{len(result)}行")
     return result
 

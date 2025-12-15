@@ -1,0 +1,4 @@
+# file: D:\Python\历史数据看板\O2O-\modules\data\competitor_loader.py
+# hypothesis_version: 6.148.7
+
+['.xls', '.xlsx', '5km内竞对数量', 'SKU', 'SKU数', '^新增竞对\\d*$', 'brand', 'brand_col', 'competitor_col', 'dashboard', 'sku', 'sku_col', 'sku数', 'subsidy', 'subsidy_col', '⚠️ 未检测到竞对列', '品牌特性', '商圈类型', '商补率', '城市', '新增竞对列(如新增竞对1)', '竞对名称', '竞对序号', '运营', '近15天5km内新增竞对数量', '门店名称']

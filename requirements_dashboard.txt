@@ -14,6 +14,12 @@ numpy>=1.24.0
 openpyxl>=3.1.0
 xlsxwriter>=3.1.0
 
+# ECharts图表组件
+dash-echarts>=0.0.12
+
+# 图片处理（透明背景PNG下载）
+Pillow>=9.0.0
+
 # 可选：性能优化
 # dash-extensions>=1.0.0  # 提供额外的Dash组件
 # dash-mantine-components>=0.12.0  # 现代化UI组件库
